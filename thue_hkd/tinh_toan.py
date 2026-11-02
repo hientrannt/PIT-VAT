@@ -246,7 +246,9 @@ def xu_ly_so_quy(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, che_do:
 
     co_phieu = ghi_chu != ""
     _bao_kh_thieu(ma, info, df, L.TEN_LOAI[che_do], canh_bao, (pl != "") & (ma != tk_no), cot_ten=("Tên KH", "Người thanh toán"))
-    _bao_tk_moi(tk_no, tk_co, pl, hkd & co_phieu, L.TEN_LOAI[che_do], canh_bao)
+    bo_qua = pd.Series([[a, b] in [[str(x), str(y)] for x, y in cfg.cap_tk_khong_tinh]
+                        for a, b in zip(tk_no, tk_co)], index=df.index, dtype=bool)
+    _bao_tk_moi(tk_no, tk_co, pl, hkd & co_phieu & ~bo_qua, L.TEN_LOAI[che_do], canh_bao)
 
     chi = tien
     kk, gtgt, tncn = _tinh_ke_khai(chi, cfg)

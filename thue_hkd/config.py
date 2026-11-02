@@ -80,6 +80,10 @@ class Config:
     loc_ngay_can_tru: bool = False  # file gốc: cấn trừ không lọc theo ngày
     loc_ngay_to_cp: bool = False
 
+    # --- Cặp [TK Nợ, TK Có] chắc chắn KHÔNG tính thuế (không báo ở LƯU Ý) ---
+    # 6418 / 1121: chi mời cơm sinh nhật KH (Tổ CP) – không tính thuế.
+    cap_tk_khong_tinh: list = field(default_factory=lambda: [["6418", "1121"]])
+
     @property
     def ty_le_tong(self) -> float:
         return self.ty_le_gtgt + self.ty_le_tncn

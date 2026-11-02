@@ -101,5 +101,11 @@
   ],
   "ma_kho": "NTG01",
   "loc_ngay_can_tru": false,
-  "loc_ngay_to_cp": false
+  "loc_ngay_to_cp": false,
+  "cap_tk_khong_tinh": [
+    [
+      "6418",
+      "1121"
+    ]
+  ]
 }

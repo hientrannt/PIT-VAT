@@ -1,0 +1,105 @@
+{
+  "ty_le_gtgt": 0.01,
+  "ty_le_tncn": 0.005,
+  "nguoi_phu_trach_dt": "Dung",
+  "nguoi_phu_trach_cp": "MINH HIEN",
+  "nguoi_phu_trach_kho": "Cuong",
+  "nguon_dt": "Tổ DT",
+  "nguon_cp": "Tổ CP",
+  "nguon_kho": "Cường (13887)",
+  "loai_kh_chiu_thue": [
+    "7. HỘ KINH DOANH",
+    "2. HIỆU THUỐC"
+  ],
+  "loai_kh_khong_chiu": "KHÔNG CHỊU VAT/PIT (không phải HKD)",
+  "tk_no_sang_tk_co": {
+    "1312": "51185",
+    "33871": "51185",
+    "6418": "15614",
+    "335": "15614",
+    "33412": "33311"
+  },
+  "bang_phan_loai": [
+    [
+      "335",
+      "15614",
+      "Quà tặng KH (CP)"
+    ],
+    [
+      "335",
+      "*",
+      "CKTT"
+    ],
+    [
+      "635",
+      "*",
+      "CKTT"
+    ],
+    [
+      "1312",
+      "1311",
+      "Chi TM TB KM"
+    ],
+    [
+      "1312",
+      "51185",
+      "Quà TB KM"
+    ],
+    [
+      "33871",
+      "51185",
+      "Quà TB CLB"
+    ],
+    [
+      "6418",
+      "15614",
+      "Quà tặng KH (CP)"
+    ],
+    [
+      "33412",
+      "33311",
+      "Quà Xuất tặng NV"
+    ],
+    [
+      "52111",
+      "*",
+      "Chi TM TB CLB"
+    ],
+    [
+      "52112",
+      "*",
+      "Chi TM TB CLB"
+    ]
+  ],
+  "phan_loai_cong_vat": [
+    "Quà TB CLB",
+    "Quà TB KM"
+  ],
+  "tk_no_loc_xuat": [
+    "1312",
+    "33871",
+    "6418",
+    "335"
+  ],
+  "tien_to_phieu": {
+    "BTH": [
+      "1311",
+      "Cấn trừ"
+    ],
+    "PCN": [
+      "1121",
+      "CHI NH"
+    ]
+  },
+  "loai_kho": {
+    "0": "Xuất Bán",
+    "1": "Xuất Khuyến Mãi",
+    "10": "Xuất Tặng"
+  },
+  "pl_km_khong_tinh": [
+    "Xuất Bán"
+  ],
+  "ma_kho": "NTG01",
+  "loc_ngay_can_tru": false,
+  "loc_ngay_to_cp": false
+}

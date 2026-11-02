@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+# Không đưa dữ liệu thật / kết quả lên git
+*.xlsx
+*.xlsb
+*.xls
+*.xlsm
+*.csv

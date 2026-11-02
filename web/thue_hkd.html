@@ -182,7 +182,7 @@ const CFG_MAC_DINH = {
   pl_km_khong_tinh: ["Xuất Bán"],
   ma_kho: "NTG01",
   loc_ngay_can_tru: false, loc_ngay_to_cp: false,
-  cap_tk_khong_tinh: [["6418", "1121"]]
+  cap_tk_khong_tinh: [["6418", "1121"], ["33882", "*"]]
 };
 
 /* =========================================================================
@@ -461,9 +461,10 @@ function xuLySoQuy(b, kh, cfg, cheDo, tu, den, cb) {
   const pl = tkNo.map((a, i) => phanLoai(a, tkCo[i], cfg));
   const info = traKH(ma, kh), hkd = info.map(x => laHKD(x.ploai, cfg));
   const tenNguon = TEN_LOAI[cheDo];
-  const boQuaSet = new Set(cfg.cap_tk_khong_tinh.map(([a, c]) => String(a) + "|" + String(c)));
+  const capBoQua = cfg.cap_tk_khong_tinh.map(([a, c]) => [String(a), String(c)]);
+  const boQua = (no, co) => capBoQua.some(([a, c]) => a === no && (c === "*" || c === co));
   baoKHThieu(ma, info, b, tenNguon, cb, pl.map((p, i) => p !== "" && ma[i] !== tkNo[i]), ["Tên KH", "Người thanh toán"]);
-  baoTKMoi(tkNo, tkCo, pl, hkd.map((h, i) => h && ghiChu[i] !== "" && !boQuaSet.has(tkNo[i] + "|" + tkCo[i])), tenNguon, cb);
+  baoTKMoi(tkNo, tkCo, pl, hkd.map((h, i) => h && ghiChu[i] !== "" && !boQua(tkNo[i], tkCo[i])), tenNguon, cb);
   const nguoi = cheDo === L.CAN_TRU ? cfg.nguoi_phu_trach_dt : cfg.nguoi_phu_trach_cp;
   const locNgay = cheDo === L.CAN_TRU ? cfg.loc_ngay_can_tru : cfg.loc_ngay_to_cp;
   const out = [];
@@ -743,7 +744,11 @@ function duLieuMau(thang, nam) {
    ========================================================================= */
 const $ = id => document.getElementById(id);
 const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } } };
-let cfg = (() => { try { const s = store.get("thueHkdCfg"); return s ? { ...CFG_MAC_DINH, ...JSON.parse(s) } : structuredClone(CFG_MAC_DINH); } catch (e) { return structuredClone(CFG_MAC_DINH); } })();
+let cfg = (() => { try { const s = store.get("thueHkdCfg"); if (!s) return structuredClone(CFG_MAC_DINH);
+  const c = { ...CFG_MAC_DINH, ...JSON.parse(s) };
+  /* cấu hình cũ đã lưu: bổ sung các cặp TK không tính mới của mặc định */
+  CFG_MAC_DINH.cap_tk_khong_tinh.forEach(p => { if (!c.cap_tk_khong_tinh.some(q => q[0] === p[0] && q[1] === p[1])) c.cap_tk_khong_tinh.push(p); });
+  return c; } catch (e) { return structuredClone(CFG_MAC_DINH); } })();
 let bangs = [], loiDoc = [], ketQua = null, tabHien = "tat_ca";
 const dangMau = () => bangs.length > 0 && bangs.every(b => b.mau);
 

@@ -83,7 +83,8 @@ chỉ cần sửa file này (rồi tải lên ở thanh bên hoặc dùng `--cau
 ## Một số điểm cần xác nhận
 
 * **Tổ CP:** lấy các dòng sổ quỹ chi có phân loại theo bảng TK và KH là HKD. Các khoản 6418 / TK Có 1121
-  (mời cơm sinh nhật KH) **không tính thuế** (đã xác nhận) và không báo ở LƯU Ý (`cap_tk_khong_tinh` trong cấu hình).
+  (mời cơm sinh nhật KH) và 33882 (chi lại tiền CKTT) **không tính thuế** (đã xác nhận) và không báo ở LƯU Ý
+  (`cap_tk_khong_tinh` trong cấu hình).
 * **Sheet HSKH** trong file mẫu có một số ô bị nối đôi (vd “Võ CaVõ Ca”, MST lặp 2 lần); phần mềm tự sửa và báo ở LƯU Ý.
 
 ## Phát triển

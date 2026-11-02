@@ -82,7 +82,9 @@ class Config:
 
     # --- Cặp [TK Nợ, TK Có] chắc chắn KHÔNG tính thuế (không báo ở LƯU Ý) ---
     # 6418 / 1121: chi mời cơm sinh nhật KH (Tổ CP) – không tính thuế.
-    cap_tk_khong_tinh: list = field(default_factory=lambda: [["6418", "1121"]])
+    # 33882 / *  : chi lại tiền CKTT (đã đưa vào TK 33882) – không tính thuế.
+    # TK Có "*" = bất kỳ.
+    cap_tk_khong_tinh: list = field(default_factory=lambda: [["6418", "1121"], ["33882", "*"]])
 
     @property
     def ty_le_tong(self) -> float:

@@ -14,6 +14,10 @@ TNCN 6.013.263).
 
 ## Cách chạy
 
+### Bản chạy trên trình duyệt (không cần cài gì)
+File `web/thue_hkd.html`: mở trực tiếp bằng Chrome/Edge (hoặc qua link Claude đã chia sẻ). Cùng logic với bản Python,
+đã đối chiếu khớp 5.849/5.849 dòng. Dữ liệu chỉ xử lý trong trình duyệt.
+
 ### Windows (dễ nhất)
 1. Cài Python 3.10 trở lên từ <https://www.python.org/downloads/> (nhớ tick **Add python.exe to PATH**).
 2. Tải thư mục này về, nhấp đúp **`chay_phan_mem.bat`**. Lần đầu sẽ mất vài phút để cài thư viện.

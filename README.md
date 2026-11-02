@@ -32,6 +32,19 @@ pip install -r requirements.txt
 python cli.py --thang 9 --nam 2026 "D:/ThueHKD/T9" -o "D:/ThueHKD/KetQua_T9.xlsx"
 ```
 
+## Đặt tên file
+
+Phần mềm nhận loại file theo **dòng tiêu đề cột**, không theo tên file. Tên file chỉ quan trọng với **sổ quỹ**:
+sổ quỹ cấn trừ (Tổ DT) và sổ quỹ chi (Tổ CP) có cùng mẫu cột, nên phân biệt bằng tên:
+
+* Tên chứa `CAN TRU` / `CAN_TRU` / `cấn trừ` → Sổ quỹ – Cấn trừ (Tổ DT)
+* Tên chứa `DATA CHI` / `DATA_CHI` / `TO CP` / `TO_CP` / `Tổ CP` → Sổ quỹ – Chi (Tổ CP)
+* Không có các chữ trên: đa số phiếu bắt đầu bằng `PC` → Tổ CP, còn lại → Cấn trừ.
+
+Gợi ý đặt tên thống nhất: `T09.2026_<LOẠI>[_phần].xlsx`, ví dụ `T09.2026_SO_QUY_CAN_TRU.xlsx`,
+`T10.2026_SO_QUY_TO_CP.xlsx`, `T09.2026_XUAT_KM_1.xlsx`, `T09.2026_XUAT_KM_2.xlsx`, `T09.2026_VOUCHER.xlsx`,
+`T09.2026_SO_CAI.xlsx`, `HSKH.xlsx`, `BANG_THUE.xlsx`, `T09.2026_BAN_HANG_KHO_NTG01.xlsx`.
+
 ## Đưa lên mạng để có link riêng (Vercel / Cloudflare Pages)
 
 Trang web là 1 file tĩnh `web/index.html` (tạo từ `web/thue_hkd.html` bằng `python scripts/tao_index.py`).

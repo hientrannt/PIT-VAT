@@ -147,3 +147,15 @@ def test_cau_hinh_them_tk(bo_file):
     kq, _ = chay(bo_file, TU, DEN, cfg)
     assert kq.xuat_km["Mã số KH"].tolist() == ["KH1"]
     assert Config.from_json(cfg.to_json()).tk_no_loc_xuat == ["33871"]
+
+
+@pytest.mark.parametrize("ten,ky_vong", [
+    ("T09.2026_SoQuy_CAN_TRU.xlsx", L.CAN_TRU), ("So quy cấn trừ T9.xlsx", L.CAN_TRU),
+    ("T10.2026_DATA_CHI.xlsx", L.CHI), ("So quy TO-CP thang 10.xlsx", L.CHI), ("Tổ CP T10.xlsx", L.CHI),
+    ("SoQuy_T9.xlsx", L.CAN_TRU),
+])
+def test_ten_file_so_quy(tmp_path, ten, ky_vong):
+    df = pd.DataFrame({"Phiếu chi hạch toán": ["BTH/1", "PTN/2"], "mstk": ["1312", "1121"],
+                       "Số tiền": [1, 2], "Mã số": ["KH1", "KH1"]})
+    p = _ghi(tmp_path, ten, df)
+    assert L.doc_file(p)[0].loai == ky_vong

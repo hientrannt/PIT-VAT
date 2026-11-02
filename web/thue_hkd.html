@@ -291,9 +291,9 @@ function nhanDien(rows) {
   return [L.KHONG_RO, -1];
 }
 function laFileChi(ten, sheet, bang) {
-  const nhan = norm(ten + " " + sheet);
-  if (nhan.includes("cấn trừ") || nhan.includes("can tru") || nhan.includes("cantru")) return false;
-  if (/(^|[^a-z])(data[ _-]?chi|to[ _-]?cp|tổ[ _-]?cp)/.test(nhan)) return true;
+  const nhan = norm((ten + " " + sheet).replace(/[_\-.]+/g, " "));
+  if (/cấn ?trừ|can ?tru/.test(nhan)) return false;
+  if (/(^|[^a-zà-ỹ])(data ?chi|to ?cp|tổ ?cp)([^a-zà-ỹ]|$)/.test(nhan)) return true;
   const c = bang.cols["phiếu chi hạch toán"];
   if (c) { const v = c.filter(x => x != null).map(x => String(x).slice(0, 2).toUpperCase());
     if (v.length && v.filter(x => x === "PC").length / v.length > 0.5) return true; }

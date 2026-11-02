@@ -155,10 +155,10 @@ def doc_file(nguon: str | Path | BinaryIO, ten: str | None = None) -> list[BangD
 def _la_file_chi(ten: str, sheet: str, df: pd.DataFrame) -> bool:
     """Sổ quỹ của Tổ CP: tên file/sheet chứa 'CHI' (không phải 'CẤN TRỪ'),
     hoặc phần lớn phiếu là phiếu chi (PC...)."""
-    nhan = chuan_hoa(f"{ten} {sheet}")
-    if "cấn trừ" in nhan or "can tru" in nhan or "cantru" in nhan:
+    nhan = chuan_hoa(re.sub(r"[_\-.]+", " ", f"{ten} {sheet}"))
+    if re.search(r"cấn ?trừ|can ?tru", nhan):
         return False
-    if re.search(r"(^|[^a-z])(data[ _-]?chi|to[ _-]?cp|tổ[ _-]?cp)", nhan):
+    if re.search(r"(^|[^a-zà-ỹ])(data ?chi|to ?cp|tổ ?cp)([^a-zà-ỹ]|$)", nhan):
         return True
     cot = "phiếu chi hạch toán"
     if cot in df.columns:

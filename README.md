@@ -32,6 +32,20 @@ pip install -r requirements.txt
 python cli.py --thang 9 --nam 2026 "D:/ThueHKD/T9" -o "D:/ThueHKD/KetQua_T9.xlsx"
 ```
 
+## Đưa lên mạng để có link riêng (Vercel / Cloudflare Pages)
+
+Trang web là 1 file tĩnh `web/index.html` (tạo từ `web/thue_hkd.html` bằng `python scripts/tao_index.py`).
+Không có máy chủ: dữ liệu vẫn chỉ xử lý trong trình duyệt người dùng.
+
+**Cloudflare Pages – kéo-thả, không cần GitHub:** dash.cloudflare.com → Workers & Pages → Create → Pages →
+*Upload assets* → đặt tên dự án → kéo-thả thư mục `web` (hoặc file zip) → Deploy → link `https://<tên>.pages.dev`.
+
+**Vercel – nối với GitHub (tự cập nhật khi repo thay đổi):** vercel.com/new → Import `hientrannt/PIT-VAT` →
+giữ nguyên cài đặt (đã có `vercel.json`, thư mục xuất là `web`) → Deploy → link `https://<tên>.vercel.app`.
+
+**Cloudflare Pages – nối với GitHub:** Create → Pages → *Connect to Git* → chọn repo → Build command để trống,
+Build output directory: `web` → Save and Deploy.
+
 ## Các loại file cần xuất
 
 | Loại | Tương ứng sheet cũ | Cột nhận diện (bắt buộc có) |

@@ -792,7 +792,9 @@ function kyTuDuLieu(du, cfg) {
     for (const loai of nhomLoai) { if (!du[loai] || !du[loai].n) continue;
       ngayKy(du[loai], cfg, loai)[0].forEach(d => { if (d == null) return; const x = new Date(EPOCH + d * 86400000);
         const k = x.getUTCFullYear() * 100 + x.getUTCMonth() + 1; dem.set(k, (dem.get(k) || 0) + 1); }); }
-    if (dem.size) { const k = [...dem].sort((a, b) => b[1] - a[1])[0][0]; return [k % 100, Math.floor(k / 100)]; }
+    /* tháng GẦN NHẤT có phát sinh (file thường chứa cả năm); bỏ tháng lẻ tẻ < 20% số dòng của tháng nhiều nhất */
+    if (dem.size) { const nguong = Math.max(...dem.values()) * 0.2;
+      const k = Math.max(...[...dem].filter(([, v]) => v >= nguong).map(([k]) => k)); return [k % 100, Math.floor(k / 100)]; }
   }
   return null;
 }
@@ -1004,7 +1006,7 @@ function tuChonKy() {
   if (!ky) return;
   $("tuyChon").checked = false; document.querySelectorAll(".kn").forEach(e => e.hidden = true);
   $("thang").value = ky[0]; $("nam").value = ky[1];
-  $("kyTu").hidden = false; $("kyTu").textContent = `Kỳ tự chọn theo ngày chứng từ / ngày nhận hàng trong dữ liệu: tháng ${ky[0]}/${ky[1]}. Có thể đổi nếu cần.`;
+  $("kyTu").hidden = false; $("kyTu").textContent = `Kỳ tự chọn = tháng gần nhất có dữ liệu (theo ngày chứng từ / ngày nhận hàng): tháng ${ky[0]}/${ky[1]}. Muốn tính tháng khác thì đổi ô Tháng ở trên.`;
 }
 
 function veBangFile() {

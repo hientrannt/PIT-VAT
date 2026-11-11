@@ -737,7 +737,10 @@ def theo_khach_hang(tat_ca: pd.DataFrame) -> pd.DataFrame:
 
 
 def ky_tu_du_lieu(du_lieu: dict[str, pd.DataFrame], cfg: Config | None = None) -> tuple[int, int] | None:
-    """Tháng/năm xuất hiện nhiều nhất trong các nguồn phát sinh (theo ngày chứng từ / ngày nhận hàng)."""
+    """Tháng/năm GẦN NHẤT có phát sinh trong các nguồn (theo ngày chứng từ / ngày nhận hàng).
+
+    File xuất thường chứa cả năm → lấy tháng mới nhất; bỏ qua tháng lẻ tẻ (< 20% số dòng của tháng nhiều nhất,
+    vd vài dòng ngày nhập sai sang tháng sau)."""
     cfg = cfg or Config()
     # Ưu tiên nguồn phát sinh của tổ (Xuất KM, Voucher, sổ quỹ); dữ liệu kho thường kéo dài nhiều tháng.
     for nhom in ((L.XUAT_KM, L.VOUCHER, L.CAN_TRU, L.CHI), (L.KHO,)):
@@ -750,7 +753,8 @@ def ky_tu_du_lieu(du_lieu: dict[str, pd.DataFrame], cfg: Config | None = None) -
             for d in nk.dropna():
                 dem[(d.month, d.year)] = dem.get((d.month, d.year), 0) + 1
         if dem:
-            return max(dem, key=dem.get)
+            nguong = max(dem.values()) * 0.2
+            return max((k for k, v in dem.items() if v >= nguong), key=lambda k: (k[1], k[0]))
     return None
 
 

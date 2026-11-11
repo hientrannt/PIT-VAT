@@ -59,7 +59,7 @@ def bang_nguon(bangs: list[L.BangDuLieu]) -> pd.DataFrame:
 
 def chay(nguon: Iterable, tu: date | None = None, den: date | None = None, cfg: Config | None = None,
          ghi_de_loai: dict[str, str] | None = None) -> tuple[KetQua, list[str]]:
-    """Không truyền ``tu``/``den`` thì kỳ = tháng có nhiều chứng từ nhất trong dữ liệu."""
+    """Không truyền ``tu``/``den`` thì kỳ = tháng gần nhất có phát sinh trong dữ liệu."""
     cfg = cfg or Config()
     bangs, loi = doc_nhieu_file(nguon, ghi_de_loai)
     bangs = [b for b in bangs if b.loai != L.KHONG_RO]

@@ -230,3 +230,13 @@ def test_ke_bo_sung_hd_kho(bo_file):
     kq9_goc, _ = chay(bo_file, TU, DEN)
     assert len(kq9.kho) == len(kq9_goc.kho)
     assert any(c.muc == "KÊ BỔ SUNG" and "đã thuộc kỳ" in c.noi_dung for c in kq9.canh_bao)
+
+
+def test_ky_tu_du_lieu_chon_thang_gan_nhat():
+    """File chứa cả năm: tự chọn tháng gần nhất, không phải tháng nhiều dòng nhất; bỏ tháng lẻ tẻ."""
+    import pandas as pd
+    from thue_hkd import doc_file as L
+    from thue_hkd.tinh_toan import ky_tu_du_lieu
+    ngay = ["15/01/2026"] * 100 + ["10/10/2026"] * 20 + ["02/11/2026"] * 1
+    df = pd.DataFrame({"phiếu chi hạch toán": ["BTH"] * len(ngay), "ngày chứng từ": ngay})
+    assert ky_tu_du_lieu({L.CAN_TRU: df}) == (10, 2026)

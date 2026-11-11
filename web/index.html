@@ -124,6 +124,7 @@ summary { cursor: pointer; }
     </div>
     <div id="mau" class="banner" hidden>Đang hiển thị <strong>dữ liệu mẫu</strong> để bạn xem trang hoạt động thế nào. Thêm file của bạn, dữ liệu mẫu sẽ tự bỏ đi.</div>
     <div id="dangDoc" class="note" hidden></div>
+    <div id="kyTu" class="banner" hidden></div>
   </section>
 
   <section class="card" aria-labelledby="b2">
@@ -195,7 +196,12 @@ const CFG_MAC_DINH = {
   loai_kho: { "0": "Xuất Bán", "1": "Xuất Khuyến Mãi", "10": "Xuất Tặng" },
   pl_km_khong_tinh: ["Xuất Bán"],
   ma_kho: "NTG01",
-  loc_ngay_can_tru: false, loc_ngay_to_cp: false,
+  loc_ngay_can_tru: true, loc_ngay_to_cp: true,
+  cot_ngay: {
+    CAN_TRU: ["Ngày chứng từ", "Ngày ghi sổ"], CHI: ["Ngày chứng từ", "Ngày ghi sổ"],
+    XUAT_KM: ["Ngay Hoa Don", "Ngay CT", "NgayGS"], VOUCHER: ["Ngày chứng từ", "Ngày ghi sổ"],
+    KHO: ["Ngày hóa đơn", "Ngày giao hàng"]
+  },
   cap_tk_khong_tinh: [["6418", "1121"], ["33882", "*"]]
 };
 
@@ -326,9 +332,35 @@ function docWorkbook(buf, ten) {
   }
   return kq;
 }
-function gopTheoLoai(ds) {
-  const nhom = {};
-  for (const b of ds) { if (b.loai === L.KHONG_RO) continue; (nhom[b.loai] = nhom[b.loai] || []).push(b.bang); }
+const COT_KHOA = {
+  CAN_TRU: ["phiếu chi hạch toán", "ngày chứng từ", "mstk", "số tiền", "mã số", "diễn giải"],
+  XUAT_KM: ["mshh", "solo", "sohd", "so ct", "mskh dso", "so luong", "ttien co vat", "promotion no_"],
+  VOUCHER: ["phiếu xuất", "mshh", "ngày chứng từ", "mstk", "số tiền", "mã số", "diễn giải"],
+  KHO: ["số chứng từ", "số hóa đơn", "thứ tự", "mã hàng hóa", "số lô", "số lượng", "tổng tiền giá gốc", "loại"],
+};
+COT_KHOA.CHI = COT_KHOA.CAN_TRU;
+/* Bỏ dòng giống hệt dòng đã có ở FILE KHÁC cùng loại (file xuất trùng / chồng ngày) */
+function gopTheoLoai(ds, trung) {
+  const nhom = {}, daCo = {};
+  for (const b0 of ds) {
+    if (b0.loai === L.KHONG_RO) continue;
+    let b = b0.bang;
+    if (![L.HSKH, L.HSKH_IMPORT, L.THUE, L.SO_CAI].includes(b0.loai)) {
+      let cols = (COT_KHOA[b0.loai] || []).filter(c => c in b.cols);
+      if (!cols.length) cols = b.order.filter(c => !c.startsWith("__"));
+      const truoc = daCo[b0.loai] = daCo[b0.loai] || new Map(), giu = [], moi = [], voi = new Set();
+      for (let i = 0; i < b.n; i++) {
+        const k = cols.map(c => chuoi(b.cols[c][i])).join("\x1f");
+        if (truoc.has(k)) voi.add(truoc.get(k)); else { giu.push(i); moi.push(k); }
+      }
+      moi.forEach(k => truoc.set(k, b0.ten + " [" + b0.sheet + "]"));
+      const bo = b.n - giu.length;
+      if (bo && trung) trung.push({ muc: "TRÙNG", noi_dung: `${TEN_LOAI[b0.loai]}: ${b0.ten} [${b0.sheet}] có ${bo.toLocaleString("vi-VN")} dòng giống hệt dòng ở ${[...voi].join(", ")}`,
+        so_dong: bo, hau_qua: "Đã bỏ các dòng trùng để không cộng hai lần" });
+      if (bo) { const cols2 = {}; for (const c of b.order) cols2[c] = giu.map(i => b.cols[c][i]); b = { n: giu.length, cols: cols2, order: b.order }; }
+    }
+    (nhom[b0.loai] = nhom[b0.loai] || []).push(b);
+  }
   const kq = {};
   for (const [loai, bs] of Object.entries(nhom)) {
     const tong = bs.reduce((s, b) => s + b.n, 0), cols = {}, order = [];
@@ -467,18 +499,24 @@ const thangTxt = ng => { const m = new Map(); ng.forEach(d => { if (d == null) r
   const k = String(x.getUTCMonth() + 1).padStart(2, "0") + "/" + x.getUTCFullYear(); m.set(k, (m.get(k) || 0) + 1); });
   const ks = [...m.keys()].sort((a, b) => a.slice(3) + a.slice(0, 2) < b.slice(3) + b.slice(0, 2) ? -1 : 1);
   return ks.map(k => `${k} (${m.get(k).toLocaleString("vi-VN")} dòng)`).join(", ") || "không đọc được ngày"; };
+/* Ngày xác định kỳ: cột đầu tiên trong cfg.cot_ngay[loai] có dữ liệu ngày */
+function ngayKy(b, cfg, loai) {
+  const ds = (cfg.cot_ngay && cfg.cot_ngay[loai]) || [];
+  for (const t of ds) { const k = norm(t); if (k in b.cols) { const v = b.cols[k].map(ngay); if (v.some(x => x != null)) return [v, t]; } }
+  return [new Array(b.n).fill(null), ds[0] || "?"];
+}
 /* lyDo: [[nhãn, mảng true = bị loại], ...] theo thứ tự ưu tiên */
-function chanDoan(cb, nguon, lyDo, ng, tu, den) {
+function chanDoan(cb, nguon, lyDo, ng, tu, den, tenCot = "ngày") {
   const n = lyDo.length ? lyDo[0][1].length : 0, con = new Array(n).fill(true), dong = [];
   for (const [nhan, m] of lyDo) { let k = 0; for (let i = 0; i < n; i++) if (con[i] && m[i]) { k++; con[i] = false; } if (k) dong.push([nhan, k]); }
   const ds = cb.chan_doan || (cb.chan_doan = []);
   ds.push([nguon, "Đọc được", n], [nguon, "✔ Được tính thuế", con.filter(Boolean).length]);
   dong.forEach(([nh, k]) => ds.push([nguon, "✘ " + nh, k]));
   if (ng) {
-    ds.push([nguon, "Các tháng trong dữ liệu: " + thangTxt(ng), null]);
+    ds.push([nguon, `Các tháng (theo ${tenCot}): ` + thangTxt(ng), null]);
     if (n && !ng.some(d => trongKy(d, tu, den)))
       cb.push({ muc: "KỲ", noi_dung: `${nguon}: không có dòng nào trong kỳ ${serialStr(tu)}–${serialStr(den)}`, so_dong: n,
-        hau_qua: `Dữ liệu thuộc: ${thangTxt(ng)} → kiểm tra lại tháng/năm đang chọn` });
+        hau_qua: `Theo ${tenCot}, dữ liệu thuộc: ${thangTxt(ng)} → kiểm tra lại tháng/năm đang chọn` });
   }
 }
 
@@ -504,13 +542,14 @@ function xuLySoQuy(b, kh, cfg, cheDo, tu, den, cb) {
   if (cheDo === L.CAN_TRU) lyDo.push(["Không phải phiếu cấn trừ (BTH…)", ghiChu.map((g, i) => !(g === "Cấn trừ" && tkCo[i] === "1311"))]);
   lyDo.push(["TK Nợ/TK Có không thuộc bảng phân loại", pl.map(p => p === "")], ["Mã KH không có trong HSKH", info.map(x => x.ploai === "")],
     ["KH không phải hộ kinh doanh", hkd.map(h => !h)]);
-  if (locNgay) lyDo.push(["Ngoài kỳ", ng.map(d => !trongKy(d, tu, den))]);
-  chanDoan(cb, tenNguon, lyDo, locNgay ? ng : null, tu, den);
+  const [nk, tnk] = ngayKy(b, cfg, cheDo);
+  if (locNgay) lyDo.push([`Ngoài kỳ (theo ${tnk})`, nk.map(d => !trongKy(d, tu, den))]);
+  chanDoan(cb, tenNguon, lyDo, locNgay ? nk : null, tu, den, tnk);
   const out = [];
   for (let i = 0; i < b.n; i++) {
     let ok = pl[i] !== "" && hkd[i];
     if (cheDo === L.CAN_TRU) ok = ok && ghiChu[i] === "Cấn trừ" && tkCo[i] === "1311";
-    if (locNgay) ok = ok && trongKy(ng[i], tu, den);
+    if (locNgay) ok = ok && trongKy(nk[i], tu, den);
     if (!ok) continue;
     const [kk, gt, tn] = keKhai(tien[i], cfg);
     out.push({ "Người phụ trách": nguoi, "Mã số KH": ma[i], "Họ và tên KH": info[i].ten_kh,
@@ -555,11 +594,12 @@ function xuLyXuatKM(b, sc, bangThue, kh, cfg, tu, den, cb) {
     hau_qua: "Bị loại khỏi XUẤT KM – kiểm tra/bổ sung file Sổ cái", chi_tiet: { cot: ["Số HĐ", "MSKH", "Mshh"], dong: ks } });
   baoTKMoi(tkNo, tkCo, pl, hkd, "Xuất KM", cb, cfg.tk_no_loc_xuat.map(String));
   const loc = cfg.tk_no_loc_xuat.map(String), out = [];
+  const [nk, tnk] = ngayKy(b, cfg, L.XUAT_KM);
   chanDoan(cb, "Xuất KM", [["Số HĐ không có trong Sổ cái (không tra được TK Nợ)", tkNo.map(t => t === "")],
     ["TK Nợ không thuộc danh sách tính thuế", tkNo.map(t => !loc.includes(t))], ["Mã KH không có trong HSKH", info.map(x => x.ploai === "")],
-    ["KH không phải hộ kinh doanh", hkd.map(h => !h)], ["Ngoài kỳ (theo NgayGS)", ng.map(d => !trongKy(d, tu, den))]], ng, tu, den);
+    ["KH không phải hộ kinh doanh", hkd.map(h => !h)], [`Ngoài kỳ (theo ${tnk})`, nk.map(d => !trongKy(d, tu, den))]], nk, tu, den, tnk);
   for (let i = 0; i < b.n; i++) {
-    if (!(loc.includes(tkNo[i]) && hkd[i] && trongKy(ng[i], tu, den))) continue;
+    if (!(loc.includes(tkNo[i]) && hkd[i] && trongKy(nk[i], tu, den))) continue;
     const vat = congVat[i] ? lamTron(goc[i] * ts[i]) : 0, chi = lamTron(goc[i] + vat);
     const [kk, gt, tn] = keKhai(chi, cfg);
     out.push({ "Người phụ trách": cfg.nguoi_phu_trach_dt, "Mã số KH": ma[i], "Họ và tên KH": info[i].ten_kh,
@@ -585,11 +625,12 @@ function xuLyVoucher(b, bangThue, kh, cfg, tu, den, cb) {
   baoKHThieu(ma, info, b, "Voucher", cb, pl.map(p => p !== ""), ["Tên KH", "Người thanh toán"]);
   baoTKMoi(tkNo, tkCo, pl, hkd, "Voucher", cb, cfg.tk_no_loc_xuat.map(String));
   const loc = cfg.tk_no_loc_xuat.map(String), out = [];
+  const [nk, tnk] = ngayKy(b, cfg, L.VOUCHER);
   chanDoan(cb, "Voucher", [["TK Nợ (mstk) không thuộc danh sách tính thuế", tkNo.map(t => !loc.includes(t))],
     ["Mã KH không có trong HSKH", info.map(x => x.ploai === "")], ["KH không phải hộ kinh doanh", hkd.map(h => !h)],
-    ["Ngoài kỳ (theo Ngày ghi sổ)", ng.map(d => !trongKy(d, tu, den))]], ng, tu, den);
+    [`Ngoài kỳ (theo ${tnk})`, nk.map(d => !trongKy(d, tu, den))]], nk, tu, den, tnk);
   for (let i = 0; i < b.n; i++) {
-    if (!(loc.includes(tkNo[i]) && hkd[i] && trongKy(ng[i], tu, den))) continue;
+    if (!(loc.includes(tkNo[i]) && hkd[i] && trongKy(nk[i], tu, den))) continue;
     const vat = congVat[i] ? lamTron(tien[i] * ts[i]) : 0, chi = lamTron(tien[i] + vat);
     const [kk, gt, tn] = keKhai(chi, cfg);
     out.push({ "Người phụ trách": cfg.nguoi_phu_trach_dt, "Mã số KH": ma[i], "Họ và tên KH": info[i].ten_kh,
@@ -606,7 +647,8 @@ function xuLyKho(b, kh, cfg, tu, den, cb) {
   const ngGiao = cot(b, "Ngày giao hàng").map(ngay);
   const dsKho = String(cfg.ma_kho || "").split(",").map(x => x.trim()).filter(Boolean);
   const maKho = S(cot(b, "Mã kho", false));
-  const idx = [], ngoaiKy = ngGiao.map(d => !trongKy(d, tu, den)), khacKho = maKho.map(k => dsKho.length > 0 && !dsKho.includes(k));
+  const [nk, tnk] = ngayKy(b, cfg, L.KHO);
+  const idx = [], ngoaiKy = nk.map(d => !trongKy(d, tu, den)), khacKho = maKho.map(k => dsKho.length > 0 && !dsKho.includes(k));
   for (let i = 0; i < b.n; i++) if (!ngoaiKy[i] && !khacKho[i]) idx.push(i);
   const khoKhac = new Map(); maKho.forEach((k, i) => { if (khacKho[i] && !ngoaiKy[i]) khoKhac.set(k, (khoKhac.get(k) || 0) + 1); });
   if (khoKhac.size) cb.push({ muc: "KHO", noi_dung: "Dữ liệu kho: có dòng thuộc kho khác " + dsKho.join(", ") + ": " +
@@ -644,9 +686,9 @@ function xuLyKho(b, kh, cfg, tu, den, cb) {
       "Mã CTKM": "", "Tên CTKM": "", "Nguồn": cfg.nguon_kho, "Ghi chú (Mã HH - Tên HH)": maHH[i] + " - " + tenHH[i] });
   }
   const sub2 = (arr) => { const a = new Array(b.n).fill(false); idx.forEach((i, j) => a[i] = arr[j]); return a; };
-  chanDoan(cb, "Dữ liệu kho (Cường)", [["Ngoài kỳ (theo Ngày giao hàng)", ngoaiKy], ["Khác mã kho đang chọn", khacKho],
+  chanDoan(cb, "Dữ liệu kho (Cường)", [[`Ngoài kỳ (theo ${tnk})`, ngoaiKy], ["Khác mã kho đang chọn", khacKho],
     ["Xuất Bán (không tính thuế)", sub2(ct.map(r => cfg.pl_km_khong_tinh.includes(r["PL KM"])))],
-    ["Mã KH không có trong HSKH", sub2(info.map(x => x.ploai === ""))], ["KH không phải hộ kinh doanh", sub2(ct.map(r => r.PL !== 1))]], ngGiao, tu, den);
+    ["Mã KH không có trong HSKH", sub2(info.map(x => x.ploai === ""))], ["KH không phải hộ kinh doanh", sub2(ct.map(r => r.PL !== 1))]], nk, tu, den, tnk);
   return [ct, tong];
 }
 
@@ -666,6 +708,16 @@ function theoKH(tatCa) {
 const COT_THEO_KH = ["Mã số KH", "Họ và tên KH", "Tên Quầy Thuốc/Nhà Thuốc/Tổ chức", "Mã số thuế (nếu có)", "Số CMND", ...COT_TIEN, "Số dòng", "Nguồn"];
 const tongCot = rows => { const t = {}; COT_TIEN.forEach(c => t[c] = rows.reduce((s, r) => s + (r[c] || 0), 0)); return t; };
 
+function kyTuDuLieu(du, cfg) {
+  for (const nhomLoai of [[L.XUAT_KM, L.VOUCHER, L.CAN_TRU, L.CHI], [L.KHO]]) {
+    const dem = new Map();
+    for (const loai of nhomLoai) { if (!du[loai] || !du[loai].n) continue;
+      ngayKy(du[loai], cfg, loai)[0].forEach(d => { if (d == null) return; const x = new Date(EPOCH + d * 86400000);
+        const k = x.getUTCFullYear() * 100 + x.getUTCMonth() + 1; dem.set(k, (dem.get(k) || 0) + 1); }); }
+    if (dem.size) { const k = [...dem].sort((a, b) => b[1] - a[1])[0][0]; return [k % 100, Math.floor(k / 100)]; }
+  }
+  return null;
+}
 function tinh(du, tu, den, cfg) {
   const cb = [];
   const kh = lapHoSoKH(du.HSKH, du.HSKH_IMPORT, cfg, cb);
@@ -860,7 +912,18 @@ async function themFile(files) {
     } catch (e) { loiDoc.push(`${f.name}: không đọc được (${e.message})`); }
   }
   nh.hidden = true;
+  tuChonKy();
   tinhLai();
+}
+/* Đặt tháng/năm theo ngày chứng từ / ngày hóa đơn có nhiều nhất trong dữ liệu */
+function tuChonKy() {
+  if (dangMau()) return;
+  let ky = null;
+  try { ky = kyTuDuLieu(gopTheoLoai(bangs), cfg); } catch (e) { }
+  if (!ky) return;
+  $("tuyChon").checked = false; document.querySelectorAll(".kn").forEach(e => e.hidden = true);
+  $("thang").value = ky[0]; $("nam").value = ky[1];
+  $("kyTu").hidden = false; $("kyTu").textContent = `Kỳ tự chọn theo ngày chứng từ / ngày hóa đơn trong dữ liệu: tháng ${ky[0]}/${ky[1]}. Có thể đổi nếu cần.`;
 }
 
 function veBangFile() {
@@ -894,7 +957,7 @@ function tinhLai() {
   veBangFile();
   const [tu, den] = kyHienTai();
   $("kyText").textContent = `· ${serialStr(tu)} → ${serialStr(den)}`;
-  try { ketQua = tinh(gopTheoLoai(bangs), tu, den, cfg); }
+  try { const trung = []; ketQua = tinh(gopTheoLoai(bangs, trung), tu, den, cfg); ketQua.canh_bao.unshift(...trung); }
   catch (e) { ketQua = null; $("loiDoc").textContent = "Lỗi khi tính: " + e.message; }
   veKetQua();
 }

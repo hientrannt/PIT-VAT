@@ -76,9 +76,17 @@ class Config:
     pl_km_khong_tinh: list = field(default_factory=lambda: ["Xuất Bán"])
     ma_kho: str = "NTG01"           # để trống = lấy mọi kho
 
-    # --- Lọc theo kỳ ---
-    loc_ngay_can_tru: bool = False  # file gốc: cấn trừ không lọc theo ngày
-    loc_ngay_to_cp: bool = False
+    # --- Lọc theo kỳ (tháng/năm lấy từ NGÀY CHỨNG TỪ / NGÀY HÓA ĐƠN) ---
+    loc_ngay_can_tru: bool = True
+    loc_ngay_to_cp: bool = True
+    # Cột ngày dùng để xác định kỳ: thử lần lượt, cột đầu tiên có dữ liệu ngày được dùng.
+    cot_ngay: dict = field(default_factory=lambda: {
+        "CAN_TRU": ["Ngày chứng từ", "Ngày ghi sổ"],
+        "CHI": ["Ngày chứng từ", "Ngày ghi sổ"],
+        "XUAT_KM": ["Ngay Hoa Don", "Ngay CT", "NgayGS"],
+        "VOUCHER": ["Ngày chứng từ", "Ngày ghi sổ"],
+        "KHO": ["Ngày hóa đơn", "Ngày giao hàng"],
+    })
 
     # --- Cặp [TK Nợ, TK Có] chắc chắn KHÔNG tính thuế (không báo ở LƯU Ý) ---
     # 6418 / 1121: chi mời cơm sinh nhật KH (Tổ CP) – không tính thuế.

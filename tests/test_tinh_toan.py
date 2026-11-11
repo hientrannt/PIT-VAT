@@ -159,3 +159,14 @@ def test_ten_file_so_quy(tmp_path, ten, ky_vong):
                        "Số tiền": [1, 2], "Mã số": ["KH1", "KH1"]})
     p = _ghi(tmp_path, ten, df)
     assert L.doc_file(p)[0].loai == ky_vong
+
+
+def test_tu_chon_ky_va_bo_trung(bo_file, tmp_path):
+    import shutil
+    ban_sao = tmp_path / "KM_1 ban sao.xlsx"
+    shutil.copy(bo_file[3], ban_sao)
+    kq, _ = chay(bo_file + [ban_sao])             # không truyền kỳ -> lấy từ ngày chứng từ / hóa đơn
+    assert (kq.tu_ngay, kq.den_ngay) == (TU, DEN)
+    assert kq.xuat_km["Mã số KH"].tolist() == ["KH1", "KH2"]   # dòng trùng không bị cộng 2 lần
+    assert any(c.muc == "TRÙNG" for c in kq.canh_bao)
+    assert kq.chan_doan is not None and len(kq.chan_doan)

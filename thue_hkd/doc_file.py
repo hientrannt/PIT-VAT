@@ -168,11 +168,44 @@ def _la_file_chi(ten: str, sheet: str, df: pd.DataFrame) -> bool:
     return False
 
 
-def gop_theo_loai(bangs: Iterable[BangDuLieu]) -> dict[str, pd.DataFrame]:
-    """Gộp các bảng cùng loại (giữ thứ tự file), thêm cột __nguon_file."""
+# Cột nhận dạng một dòng (để phát hiện cùng dữ liệu xuất ra ở nhiều file)
+COT_KHOA = {
+    CAN_TRU: ["phiếu chi hạch toán", "ngày chứng từ", "mstk", "số tiền", "mã số", "diễn giải"],
+    XUAT_KM: ["mshh", "solo", "sohd", "so ct", "mskh dso", "so luong", "ttien co vat", "promotion no_"],
+    VOUCHER: ["phiếu xuất", "mshh", "ngày chứng từ", "mstk", "số tiền", "mã số", "diễn giải"],
+    KHO: ["số chứng từ", "số hóa đơn", "thứ tự", "mã hàng hóa", "số lô", "số lượng", "tổng tiền giá gốc", "loại"],
+}
+COT_KHOA[CHI] = COT_KHOA[CAN_TRU]
+
+
+def _khoa_dong(df: pd.DataFrame, loai: str) -> pd.Series:
+    from .tien_ich import chuoi
+    cot = [c for c in COT_KHOA.get(loai, []) if c in df.columns] or sorted(c for c in df.columns if not c.startswith("__"))
+    if not cot:
+        return pd.Series([""] * len(df), index=df.index)
+    return df[cot].apply(lambda col: col.map(chuoi)).agg("\x1f".join, axis=1)
+
+
+def gop_theo_loai(bangs: Iterable[BangDuLieu], trung: list | None = None) -> dict[str, pd.DataFrame]:
+    """Gộp các bảng cùng loại (giữ thứ tự file), thêm cột __nguon_file.
+
+    Dòng giống hệt một dòng đã có ở FILE KHÁC cùng loại (file xuất trùng/chồng ngày) bị bỏ để không
+    cộng hai lần; ghi vào ``trung`` dạng (loại, file, số dòng bỏ, file trùng với).
+    """
     nhom: dict[str, list[pd.DataFrame]] = {}
+    da_co: dict[str, dict[str, str]] = {}
     for b in bangs:
         d = b.df.copy()
+        if b.loai not in (HSKH, HSKH_IMPORT, THUE, SO_CAI):
+            khoa = _khoa_dong(d, b.loai)
+            truoc = da_co.setdefault(b.loai, {})
+            bo = khoa.isin(truoc.keys())
+            if bo.any() and trung is not None:
+                voi = sorted({truoc[k] for k in khoa[bo]})
+                trung.append((b.loai, b.mo_ta, int(bo.sum()), ", ".join(voi)))
+            d = d[~bo.values]
+            for k in khoa[~bo].unique():
+                truoc.setdefault(k, b.mo_ta)
         d["__nguon_file"] = b.mo_ta
         nhom.setdefault(b.loai, []).append(d)
     return {k: pd.concat(v, ignore_index=True, sort=False) for k, v in nhom.items()}

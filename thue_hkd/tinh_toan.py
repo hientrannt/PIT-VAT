@@ -82,7 +82,7 @@ def _thang(ng: pd.Series) -> str:
 
 
 def _chan_doan(cb, nguon: str, ly_do: list, ng: pd.Series | None = None,
-               tu: date | None = None, den: date | None = None):
+               tu: date | None = None, den: date | None = None, ten_cot: str = "ngày"):
     """``ly_do``: [(nhãn, mask_bị_loại), ...] theo thứ tự ưu tiên; dòng không bị loại = Được tính."""
     n = len(ly_do[0][1]) if ly_do else 0
     con = pd.Series(True, index=ly_do[0][1].index) if ly_do else None
@@ -100,12 +100,12 @@ def _chan_doan(cb, nguon: str, ly_do: list, ng: pd.Series | None = None,
         for nhan, k in dong:
             ds.append({"Nguồn": nguon, "Kết quả": "✘ " + nhan, "Số dòng": k})
         if ng is not None:
-            ds.append({"Nguồn": nguon, "Kết quả": "Các tháng trong dữ liệu: " + _thang(ng), "Số dòng": None})
+            ds.append({"Nguồn": nguon, "Kết quả": f"Các tháng (theo {ten_cot}): " + _thang(ng), "Số dòng": None})
     if ng is not None and n and tu is not None:
         trong = ng.map(lambda d: d is not None and tu <= d <= den)
         if not trong.any():
             cb.append(CanhBao("KỲ", f"{nguon}: không có dòng nào trong kỳ {tu:%d/%m/%Y}–{den:%d/%m/%Y}",
-                              n, f"Dữ liệu thuộc: {_thang(ng)} → kiểm tra lại tháng/năm đang chọn"))
+                              n, f"Theo {ten_cot}, dữ liệu thuộc: {_thang(ng)} → kiểm tra lại tháng/năm đang chọn"))
 
 
 @dataclass
@@ -215,6 +215,20 @@ def _tinh_ke_khai(chi: pd.Series, cfg: Config) -> tuple[pd.Series, pd.Series, pd
     return kk, _r(kk * cfg.ty_le_gtgt), _r(kk * cfg.ty_le_tncn)
 
 
+def ngay_ky(df: pd.DataFrame, cfg: Config, loai: str) -> tuple[pd.Series, str]:
+    """Ngày dùng để xác định tháng/năm (ngày chứng từ / ngày hóa đơn) và tên cột đã dùng."""
+    ds = (cfg.cot_ngay or {}).get(loai) or []
+    for ten in ds:
+        k = L.chuan_hoa(ten)
+        if k in df.columns:
+            v = df[k].map(ngay)
+            if v.notna().any():
+                return v, ten
+    if ds:
+        return pd.Series([None] * len(df), index=df.index, dtype=object), ds[0]
+    return pd.Series([None] * len(df), index=df.index, dtype=object), "?"
+
+
 def _trong_ky(ng: pd.Series, tu: date, den: date) -> pd.Series:
     return ng.map(lambda d: d is not None and tu <= d <= den)
 
@@ -288,10 +302,11 @@ def xu_ly_so_quy(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, che_do:
     else:
         loc_ngay = cfg.loc_ngay_to_cp
         nguoi = cfg.nguoi_phu_trach_cp
+    nk, tnk = ngay_ky(df, cfg, che_do)
     if loc_ngay:
-        loc &= _trong_ky(ng, tu, den)
-        ly_do.append(("Ngoài kỳ", ~_trong_ky(ng, tu, den)))
-    _chan_doan(canh_bao, L.TEN_LOAI[che_do], ly_do, ng if loc_ngay else None, tu, den)
+        loc &= _trong_ky(nk, tu, den)
+        ly_do.append((f"Ngoài kỳ (theo {tnk})", ~_trong_ky(nk, tu, den)))
+    _chan_doan(canh_bao, L.TEN_LOAI[che_do], ly_do, nk if loc_ngay else None, tu, den, tnk)
 
     co_phieu = ghi_chu != ""
     _bao_kh_thieu(ma, info, df, L.TEN_LOAI[che_do], canh_bao, (pl != "") & (ma != tk_no), cot_ten=("Tên KH", "Người thanh toán"))
@@ -427,14 +442,15 @@ def xu_ly_xuat_km(df: pd.DataFrame | None, so_cai: pd.DataFrame | None, bang_thu
         "Mã CTKM": ghep("Maso Ctkm", "Promotion No_"),
         "Tên CTKM": ghep("Ten Ctkm", "Ten Hm"),
     }, index=df.index)
-    loc = tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat]) & hkd & _trong_ky(ng, tu, den)
+    nk, tnk = ngay_ky(df, cfg, L.XUAT_KM)
+    loc = tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat]) & hkd & _trong_ky(nk, tu, den)
     _chan_doan(canh_bao, "Xuất KM", [
         ("Số HĐ không có trong Sổ cái (không tra được TK Nợ)", tk_no == ""),
         ("TK Nợ không thuộc danh sách tính thuế", ~tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat])),
         ("Mã KH không có trong HSKH", info["ploai"] == ""),
         ("KH không phải hộ kinh doanh", ~hkd),
-        ("Ngoài kỳ (theo NgayGS)", ~_trong_ky(ng, tu, den)),
-    ], ng, tu, den)
+        (f"Ngoài kỳ (theo {tnk})", ~_trong_ky(nk, tu, den)),
+    ], nk, tu, den, tnk)
     return out[loc].reset_index(drop=True)
 
 
@@ -485,13 +501,14 @@ def xu_ly_voucher(df: pd.DataFrame | None, bang_thue: dict, kh: pd.DataFrame, cf
         "Mã CTKM": _s(_cot(df, "Mã CTKM", bat_buoc=False)),
         "Tên CTKM": _s(_cot(df, "Tên CTKM", bat_buoc=False)),
     }, index=df.index)
-    loc = tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat]) & hkd & _trong_ky(ng, tu, den)
+    nk, tnk = ngay_ky(df, cfg, L.VOUCHER)
+    loc = tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat]) & hkd & _trong_ky(nk, tu, den)
     _chan_doan(canh_bao, "Voucher", [
         ("TK Nợ (mstk) không thuộc danh sách tính thuế", ~tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat])),
         ("Mã KH không có trong HSKH", info["ploai"] == ""),
         ("KH không phải hộ kinh doanh", ~hkd),
-        ("Ngoài kỳ (theo Ngày ghi sổ)", ~_trong_ky(ng, tu, den)),
-    ], ng, tu, den)
+        (f"Ngoài kỳ (theo {tnk})", ~_trong_ky(nk, tu, den)),
+    ], nk, tu, den, tnk)
     return out[loc].reset_index(drop=True)
 
 
@@ -503,7 +520,8 @@ def xu_ly_kho(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, tu: date, 
     if df is None or not len(df):
         return pd.DataFrame(columns=COT_KHO), pd.DataFrame(columns=COT_ALL)
     ng_giao = _cot(df, "Ngày giao hàng").map(ngay)
-    ngoai_ky = ~_trong_ky(ng_giao, tu, den)
+    nk, tnk = ngay_ky(df, cfg, L.KHO)
+    ngoai_ky = ~_trong_ky(nk, tu, den)
     ma_kho_all = _s(_cot(df, "Mã kho", bat_buoc=False))
     ds_kho = [x.strip() for x in str(cfg.ma_kho or "").split(",") if x.strip()]
     khac_kho = ~ma_kho_all.isin(ds_kho) if ds_kho else pd.Series(False, index=df.index)
@@ -512,7 +530,7 @@ def xu_ly_kho(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, tu: date, 
         canh_bao.append(CanhBao("KHO", "Dữ liệu kho: có dòng thuộc kho khác " + ", ".join(ds_kho) + ": "
                                 + ", ".join(f"{k or '(trống)'} ({v:,} dòng)" for k, v in cac_kho.items()),
                                 int(cac_kho.sum()), "Bị loại – nếu cần tính, thêm mã kho vào cấu hình (ma_kho)"))
-    toan_bo_ng = ng_giao
+    toan_bo_ng = nk
     loc = ~ngoai_ky & ~khac_kho
     df_goc = df
     df = df[loc]
@@ -558,12 +576,12 @@ def xu_ly_kho(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, tu: date, 
         s.loc[idx] = v
         return s
     _chan_doan(canh_bao, "Dữ liệu kho (Cường)", [
-        ("Ngoài kỳ (theo Ngày giao hàng)", ngoai_ky),
+        (f"Ngoài kỳ (theo {tnk})", ngoai_ky),
         ("Khác mã kho đang chọn", khac_kho),
         ("Xuất Bán (không tính thuế)", _m(ct["PL KM"].isin(cfg.pl_km_khong_tinh).values)),
         ("Mã KH không có trong HSKH", _m((info["ploai"] == "").values)),
         ("KH không phải hộ kinh doanh", _m((ct["PL"] != 1).values)),
-    ], toan_bo_ng, tu, den)
+    ], toan_bo_ng, tu, den, tnk)
     c = ct[chon]
     inf = info.reset_index(drop=True)[chon.values]
     tong = pd.DataFrame({
@@ -640,6 +658,24 @@ def theo_khach_hang(tat_ca: pd.DataFrame) -> pd.DataFrame:
         "Nguồn": ("Nguồn", lambda s: ", ".join(dict.fromkeys(s))),
     }).reset_index()
     return kq.sort_values("Số tiền Kê khai", ascending=False, kind="stable").reset_index(drop=True)
+
+
+def ky_tu_du_lieu(du_lieu: dict[str, pd.DataFrame], cfg: Config | None = None) -> tuple[int, int] | None:
+    """Tháng/năm xuất hiện nhiều nhất trong các nguồn phát sinh (theo ngày chứng từ / ngày hóa đơn)."""
+    cfg = cfg or Config()
+    # Ưu tiên nguồn phát sinh của tổ (Xuất KM, Voucher, sổ quỹ); dữ liệu kho thường kéo dài nhiều tháng.
+    for nhom in ((L.XUAT_KM, L.VOUCHER, L.CAN_TRU, L.CHI), (L.KHO,)):
+        dem: dict[tuple[int, int], int] = {}
+        for loai in nhom:
+            df = du_lieu.get(loai)
+            if df is None or not len(df):
+                continue
+            nk, _ = ngay_ky(df, cfg, loai)
+            for d in nk.dropna():
+                dem[(d.month, d.year)] = dem.get((d.month, d.year), 0) + 1
+        if dem:
+            return max(dem, key=dem.get)
+    return None
 
 
 def tinh(du_lieu: dict[str, pd.DataFrame], tu: date, den: date, cfg: Config | None = None) -> KetQua:

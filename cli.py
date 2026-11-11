@@ -30,7 +30,7 @@ def main(argv=None) -> int:
     elif a.thang and a.nam:
         tu, den = ky_thang(a.thang, a.nam)
     else:
-        ap.error("Cần --thang và --nam, hoặc --tu và --den")
+        tu = den = None   # tự lấy tháng/năm theo ngày chứng từ / ngày hóa đơn trong dữ liệu
 
     cfg = Config.from_json(a.cau_hinh)
     files = liet_ke_file(a.duong_dan)
@@ -42,6 +42,8 @@ def main(argv=None) -> int:
     for l in loi:
         print("  ! " + l)
     print(kq.nguon.to_string(index=False))
+    tu, den = kq.tu_ngay, kq.den_ngay
+    print(f"\nKỲ TÍNH: {tu:%d/%m/%Y} → {den:%d/%m/%Y}")
     print()
     for nhan, df in ((cfg.nguon_dt, kq.tong_hop_dt), (cfg.nguon_cp, kq.to_cp), (cfg.nguon_kho, kq.kho),
                      ("TỔNG CỘNG", kq.tat_ca)):

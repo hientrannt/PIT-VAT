@@ -100,8 +100,31 @@
     "Xuất Bán"
   ],
   "ma_kho": "NTG01",
-  "loc_ngay_can_tru": false,
-  "loc_ngay_to_cp": false,
+  "loc_ngay_can_tru": true,
+  "loc_ngay_to_cp": true,
+  "cot_ngay": {
+    "CAN_TRU": [
+      "Ngày chứng từ",
+      "Ngày ghi sổ"
+    ],
+    "CHI": [
+      "Ngày chứng từ",
+      "Ngày ghi sổ"
+    ],
+    "XUAT_KM": [
+      "Ngay Hoa Don",
+      "Ngay CT",
+      "NgayGS"
+    ],
+    "VOUCHER": [
+      "Ngày chứng từ",
+      "Ngày ghi sổ"
+    ],
+    "KHO": [
+      "Ngày hóa đơn",
+      "Ngày giao hàng"
+    ]
+  },
   "cap_tk_khong_tinh": [
     [
       "6418",

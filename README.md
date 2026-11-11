@@ -29,8 +29,18 @@ File `web/thue_hkd.html`: mở trực tiếp bằng Chrome/Edge (hoặc qua link
 pip install -r requirements.txt
 ```
 ```bash
-python cli.py --thang 9 --nam 2026 "D:/ThueHKD/T9" -o "D:/ThueHKD/KetQua_T9.xlsx"
+python cli.py "D:/ThueHKD/T9" -o "D:/ThueHKD/KetQua_T9.xlsx"   # tự lấy kỳ; thêm --thang 9 --nam 2026 để chỉ định
 ```
+
+## Tháng/năm & dữ liệu trùng
+
+* **Kỳ tính lấy theo NGÀY CHỨNG TỪ / NGÀY HÓA ĐƠN**: sổ quỹ & voucher theo *Ngày chứng từ*, Xuất KM theo
+  *Ngay Hoa Don* (rồi *Ngay CT*), dữ liệu kho theo *Ngày hóa đơn*. Đổi được ở `cot_ngay` trong cấu hình.
+  Mọi nguồn (kể cả cấn trừ, Tổ CP) đều lọc theo kỳ.
+* Không chọn kỳ (CLI không truyền `--thang/--nam`; trang web khi thêm file) → **tự chọn tháng có nhiều chứng từ nhất**.
+* Một thư mục để nhiều file (cả file tổng hợp cũ lẫn file xuất rời, hoặc 2 lần xuất chồng ngày): dòng giống hệt
+  dòng đã có ở file khác cùng loại **bị bỏ, không cộng hai lần**, và báo ở LƯU Ý (mục TRÙNG).
+* Sheet **KIỂM TRA DỮ LIỆU**: mỗi nguồn đọc được bao nhiêu dòng, được tính bao nhiêu, bị loại vì sao, dữ liệu thuộc tháng nào.
 
 ## Đặt tên file
 

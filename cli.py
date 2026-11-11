@@ -12,6 +12,7 @@ from datetime import date
 from pathlib import Path
 
 from thue_hkd import Config, chay, ghi_excel, ky_thang, liet_ke_file
+from thue_hkd.tinh_toan import bang_tong_chi_tiet
 
 
 def main(argv=None) -> int:
@@ -45,11 +46,11 @@ def main(argv=None) -> int:
     tu, den = kq.tu_ngay, kq.den_ngay
     print(f"\nKỲ TÍNH: {tu:%d/%m/%Y} → {den:%d/%m/%Y}")
     print()
-    for nhan, df in ((cfg.nguon_dt, kq.tong_hop_dt), (cfg.nguon_cp, kq.to_cp), (cfg.nguon_kho, kq.kho),
-                     ("TỔNG CỘNG", kq.tat_ca)):
+    for nhan, _, df in bang_tong_chi_tiet(kq, cfg):
         t = kq.tong(df)
-        print(f"{nhan:<16} {len(df):>7} dòng | Kê khai {t['Số tiền Kê khai']:>18,.0f} | "
-              f"GTGT {t['Tiền thuế GTGT']:>14,.0f} | TNCN {t['Tiền thuế TNCN']:>14,.0f}")
+        print(f"{nhan:<22} {len(df):>7} dòng | Kê khai {t['Số tiền Kê khai']:>16,.0f} | "
+              f"GTGT {t['Tiền thuế GTGT']:>13,.0f} | TNCN {t['Tiền thuế TNCN']:>13,.0f} | "
+              f"Tổng thuế {t['Tiền thuế GTGT'] + t['Tiền thuế TNCN']:>13,.0f}")
     print("\nKIỂM TRA DỮ LIỆU:")
     for r in kq.chan_doan.itertuples(index=False):
         so_dong = "" if r[2] is None or r[2] != r[2] else f"{int(r[2]):>8,}"

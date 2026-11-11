@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from .config import Config
-from .tinh_toan import COT_KHO, COT_TIEN, KetQua
+from .tinh_toan import COT_KHO, COT_TIEN, KetQua, bang_tong_chi_tiet
 
 COT_SO_KHO = ["VAT %", "TT giá gốc", "T.Tiền thuế", "TT tính thuế", "Số tiền chi",
               "Thuế 1%", "Thuế 0.5%", "Tổng thuế"]
@@ -95,19 +95,23 @@ def ghi_excel(kq: KetQua, dich: str | Path | io.BytesIO | None = None, cfg: Conf
         g = _Ghi(wb)
 
         # --- Tổng hợp tất cả (tương đương sheet ALL) ---
-        ws = g.bang("TỔNG HỢP", kq.tat_ca, COT_TIEN, ["Ngày ghi sổ"], dong_dau=5, do_rong=RONG)
+        ws = g.bang("TỔNG HỢP", kq.tat_ca, COT_TIEN, ["Ngày ghi sổ"], dong_dau=3 + len(bang_tong_chi_tiet(kq, cfg)),
+                    do_rong=RONG)
         ws.write(0, 0, f"BẢNG TỔNG HỢP THUẾ HỘ KINH DOANH – từ {kq.tu_ngay:%d/%m/%Y} đến {kq.den_ngay:%d/%m/%Y}",
                  g.f_h1)
         ws.write(1, 0, "Nguồn", g.f_dam)
         ws.write(1, 1, "Số dòng", g.f_dam)
-        for j, c in enumerate(COT_TIEN):
+        for j, c in enumerate(COT_TIEN + ["Tổng thuế (GTGT + TNCN)"]):
             ws.write(1, 6 + j, c, g.f_tieu_de)
-        for i, (nhan, df) in enumerate(((cfg.nguon_dt, kq.tong_hop_dt), (cfg.nguon_cp, kq.to_cp),
-                                        (cfg.nguon_kho, kq.kho))):
-            ws.write(2 + i, 0, nhan)
+        for i, (nhan, cap, df) in enumerate(bang_tong_chi_tiet(kq, cfg)):
+            f_nhan = g.f_dam if cap == 0 else (g.f_nhan if cap == 2 else None)
+            f_so = g.f_tong if cap == 2 else g.f_so
+            ws.write(2 + i, 0, nhan, f_nhan)
             ws.write_number(2 + i, 1, len(df))
+            tong = {c: float(df[c].sum()) if len(df) else 0.0 for c in COT_TIEN}
             for j, c in enumerate(COT_TIEN):
-                ws.write_number(2 + i, 6 + j, float(df[c].sum()) if len(df) else 0, g.f_so)
+                ws.write_number(2 + i, 6 + j, tong[c], f_so)
+            ws.write_number(2 + i, 6 + len(COT_TIEN), tong["Tiền thuế GTGT"] + tong["Tiền thuế TNCN"], f_so)
 
         if kq.chan_doan is not None:
             g.bang("KIỂM TRA DỮ LIỆU", kq.chan_doan, ["Số dòng"], tong=False,

@@ -674,6 +674,20 @@ def _bao_tk_moi(tk_no, tk_co, pl, hkd, ten_nguon, canh_bao, tk_loc=None):
 # ----------------------------------------------------------------------------
 # Tổng hợp
 # ----------------------------------------------------------------------------
+def bang_tong_chi_tiet(kq: "KetQua", cfg: Config) -> list[tuple[str, int, pd.DataFrame]]:
+    """Các dòng của bảng tổng: (nhãn, cấp 0 = tổ / 1 = chi tiết / 2 = tổng cộng, dữ liệu)."""
+    pl_kho = list(dict.fromkeys(kq.kho["Phân Loại"])) if len(kq.kho) else ["Xuất Khuyến Mãi", "Xuất Tặng"]
+    return [
+        (cfg.nguon_dt, 0, kq.tong_hop_dt),
+        ("   · Cấn trừ", 1, kq.can_tru), ("   · Xuất KM", 1, kq.xuat_km), ("   · Voucher", 1, kq.xuat_vc),
+        (cfg.nguon_cp, 0, kq.to_cp),
+        ("   · Sổ quỹ chi", 1, kq.to_cp),
+        (cfg.nguon_kho, 0, kq.kho),
+        *[("   · " + pl, 1, kq.kho[kq.kho["Phân Loại"] == pl] if len(kq.kho) else kq.kho) for pl in pl_kho],
+        ("TỔNG CỘNG", 2, kq.tat_ca),
+    ]
+
+
 def theo_khach_hang(tat_ca: pd.DataFrame) -> pd.DataFrame:
     if not len(tat_ca):
         return pd.DataFrame(columns=["Mã số KH", "Họ và tên KH", "Tên Quầy Thuốc/Nhà Thuốc/Tổ chức",

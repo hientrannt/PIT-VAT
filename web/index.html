@@ -76,6 +76,12 @@ th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: le
 th { background: var(--accent-soft); font-weight: 600; position: sticky; top: 0; }
 td.n, th.n { text-align: right; }
 tr.total td { font-weight: 700; background: var(--accent-soft); }
+tr.to td { font-weight: 600; border-top: 2px solid var(--line); }
+tr.ct td { color: var(--muted); font-size: .82rem; }
+tr.ct td:first-child { white-space: pre; }
+#bangTong td:last-child, #bangTong th:last-child { font-weight: 700; }
+#bangTong th { white-space: normal; vertical-align: bottom; min-width: 7.5em; }
+#bangTong th:first-child { min-width: 0; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .tile { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
 .tile .k { font-size: .78rem; color: var(--muted); letter-spacing: .03em; text-transform: uppercase; }
@@ -734,6 +740,20 @@ function theoKH(tatCa) {
   return kq.map((o, i) => [o, i]).sort((a, b) => (b[0]["Số tiền Kê khai"] - a[0]["Số tiền Kê khai"]) || (a[1] - b[1])).map(x => x[0]);
 }
 const COT_THEO_KH = ["Mã số KH", "Họ và tên KH", "Tên Quầy Thuốc/Nhà Thuốc/Tổ chức", "Mã số thuế (nếu có)", "Số CMND", ...COT_TIEN, "Số dòng", "Nguồn"];
+/* Bảng tổng: mỗi tổ + chi tiết từng nguồn trong tổ. [nhãn, cấp (0 = tổ, 1 = chi tiết, 2 = tổng cộng), dòng] */
+function bangTongChiTiet(kq, cfg) {
+  const theoPL = (rows, ds) => ds.map(pl => ["   · " + pl, 1, rows.filter(r => r["Phân Loại"] === pl)]);
+  const plKho = [...new Set(kq.kho.map(r => r["Phân Loại"]))];
+  return [
+    [cfg.nguon_dt, 0, kq.tong_hop_dt],
+    ["   · Cấn trừ", 1, kq.can_tru], ["   · Xuất KM", 1, kq.xuat_km], ["   · Voucher", 1, kq.xuat_vc],
+    [cfg.nguon_cp, 0, kq.to_cp],
+    ["   · Sổ quỹ chi", 1, kq.to_cp],
+    [cfg.nguon_kho, 0, kq.kho],
+    ...theoPL(kq.kho, plKho.length ? plKho : ["Xuất Khuyến Mãi", "Xuất Tặng"]),
+    ["TỔNG CỘNG", 2, kq.tat_ca],
+  ];
+}
 const tongCot = rows => { const t = {}; COT_TIEN.forEach(c => t[c] = rows.reduce((s, r) => s + (r[c] || 0), 0)); return t; };
 
 function kyTuDuLieu(du, cfg) {
@@ -816,9 +836,9 @@ function sheetBang(rows, cols, soCols, opts = {}) {
 function taoExcel(kq, cfg, nguon) {
   const wb = XLSX.utils.book_new();
   const truoc = [[`BẢNG TỔNG HỢP THUẾ HỘ KINH DOANH – từ ${serialStr(kq.tu)} đến ${serialStr(kq.den)}`],
-    ["Nguồn", "Số dòng", "", "", "", "", ...COT_TIEN]];
-  for (const [n, d] of [[cfg.nguon_dt, kq.tong_hop_dt], [cfg.nguon_cp, kq.to_cp], [cfg.nguon_kho, kq.kho]]) {
-    const t = tongCot(d); truoc.push([n, d.length, "", "", "", "", ...COT_TIEN.map(c => t[c])]); }
+    ["Nguồn", "Số dòng", "", "", "", "", ...COT_TIEN, "Tổng thuế (GTGT + TNCN)"]];
+  for (const [n, , d] of bangTongChiTiet(kq, cfg)) {
+    const t = tongCot(d); truoc.push([n, d.length, "", "", "", "", ...COT_TIEN.map(c => t[c]), t["Tiền thuế GTGT"] + t["Tiền thuế TNCN"]]); }
   truoc.push([]);
   XLSX.utils.book_append_sheet(wb, sheetBang(kq.tat_ca, COT_ALL, COT_TIEN, { truoc }), "TỔNG HỢP");
   XLSX.utils.book_append_sheet(wb, sheetBang(kq.chan_doan.map(r => ({ "Nguồn": r[0], "Kết quả": r[1], "Số dòng": r[2] })),
@@ -1000,12 +1020,13 @@ function veKetQua() {
     .forEach(([k, v]) => { const d = document.createElement("div"); d.className = "tile"; d.innerHTML = `<div class=k></div><div class=v></div>`;
       d.firstChild.textContent = k; d.lastChild.textContent = fmt(v); $("tiles").append(d); });
   const bt = $("bangTong");
-  bt.innerHTML = "<thead><tr><th>Nguồn</th><th class=n>Số dòng</th>" + COT_TIEN.map(c => `<th class=n>${c}</th>`).join("") + "</tr></thead>";
+  bt.innerHTML = "<thead><tr><th>Nguồn</th><th class=n>Số dòng</th>" + COT_TIEN.map(c => `<th class=n>${c}</th>`).join("") + "<th class=n>Tổng thuế (GTGT + TNCN)</th></tr></thead>";
   const tb = document.createElement("tbody");
-  [[cfg.nguon_dt, kq.tong_hop_dt], [cfg.nguon_cp, kq.to_cp], [cfg.nguon_kho, kq.kho], ["TỔNG CỘNG", kq.tat_ca]].forEach(([n, d], i) => {
-    const tr = document.createElement("tr"); if (i === 3) tr.className = "total";
+  bangTongChiTiet(kq, cfg).forEach(([n, cap, d]) => {
+    const tr = document.createElement("tr"); tr.className = cap === 2 ? "total" : cap === 0 ? "to" : "ct";
     const tt = tongCot(d);
-    [n, fmt(d.length), ...COT_TIEN.map(c => fmt(tt[c]))].forEach((v, j) => { const td = document.createElement("td"); if (j) td.className = "n"; td.textContent = v; tr.append(td); });
+    [n, fmt(d.length), ...COT_TIEN.map(c => fmt(tt[c])), fmt(tt["Tiền thuế GTGT"] + tt["Tiền thuế TNCN"])].forEach((v, j) => {
+      const td = document.createElement("td"); if (j) td.className = "n"; td.textContent = v; tr.append(td); });
     tb.append(tr);
   });
   bt.append(tb);

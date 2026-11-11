@@ -24,6 +24,10 @@ File `web/thue_hkd.html`: mở trực tiếp bằng Chrome/Edge (hoặc qua link
 3. Trình duyệt tự mở trang phần mềm (chạy trên máy bạn, dữ liệu không gửi đi đâu).
 4. Chọn tháng/năm → kéo-thả các file → kiểm tra bảng “loại dữ liệu” → bấm **Tính thuế** → **Tải file Excel kết quả**.
 
+### macOS
+Nhấp đúp **`chay_tren_mac.command`**: tự cài thư viện lần đầu, tính toàn bộ thư mục `2026_Thue HKD` (tự lấy kỳ),
+ghi file kết quả vào chính thư mục đó và mở ra. Giao diện web: `./chay_phan_mem.sh`.
+
 ### Dòng lệnh (chạy cả thư mục)
 ```bash
 pip install -r requirements.txt

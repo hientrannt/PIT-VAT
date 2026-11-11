@@ -53,7 +53,7 @@ def chuan_hoa(s) -> str:
 CHU_KY = [
     (KHO, ["mã chi nhánh", "mã khách hàng", "ngày giao hàng", "loại", "tổng tiền giá gốc", "vat %"]),
     (XUAT_KM, ["mshh", "sohd", "mskh dso", "ttien co vat", "ngaygs"]),
-    (VOUCHER, ["phiếu xuất", "mshh", "mstk", "số tiền", "mã số"]),
+    (VOUCHER, ["phiếu xuất", "số tiền", "mã số"]),
     (CAN_TRU, ["phiếu chi hạch toán", "mstk", "số tiền", "mã số"]),
     (SO_CAI, ["số chứng từ", "tài khoản", "tkđư"]),
     (HSKH_IMPORT, ["tên người đại diện", "tên đơn vị", "mã số thuế gtgt"]),

@@ -462,10 +462,12 @@ def xu_ly_voucher(df: pd.DataFrame | None, bang_thue: dict, kh: pd.DataFrame, cf
     if df is None or not len(df):
         return pd.DataFrame(columns=COT_KQ)
     ma = _s(_cot(df, "Mã số"))
-    tk_no = _s(_cot(df, "mstk"))
+    tk_no = _s(_cot(df, "mstk", bat_buoc=False))
+    for du_phong in ("tk Nợ", "mstk_goc"):          # mstk trống thì lấy TK ở cột khác
+        tk_no = tk_no.where(tk_no != "", _s(_cot(df, du_phong, bat_buoc=False)))
     tk_co = tk_no.map(lambda t: str(cfg.tk_no_sang_tk_co.get(t, "")))
     pl = pd.Series([phan_loai(a, b, cfg) for a, b in zip(tk_no, tk_co)], index=df.index)
-    mshh = _s(_cot(df, "Mshh"))
+    mshh = _s(_cot(df, "Mshh", "MSHH voucher", bat_buoc=False))
     cong_vat = pl.isin(cfg.phan_loai_cong_vat)
     ts = _thue_suat(mshh, bang_thue, pd.Series([0] * len(df), index=df.index), "Voucher", canh_bao, cong_vat)
     tien = _n(_cot(df, "Số tiền"))

@@ -266,7 +266,7 @@ const TEN_LOAI = { CAN_TRU: "Sổ quỹ - Cấn trừ (Tổ DT)", CHI: "Sổ qu�
 const CHU_KY = [
   [L.KHO, ["mã chi nhánh", "mã khách hàng", "ngày giao hàng", "loại", "tổng tiền giá gốc", "vat %"]],
   [L.XUAT_KM, ["mshh", "sohd", "mskh dso", "ttien co vat", "ngaygs"]],
-  [L.VOUCHER, ["phiếu xuất", "mshh", "mstk", "số tiền", "mã số"]],
+  [L.VOUCHER, ["phiếu xuất", "số tiền", "mã số"]],
   [L.CAN_TRU, ["phiếu chi hạch toán", "mstk", "số tiền", "mã số"]],
   [L.SO_CAI, ["số chứng từ", "tài khoản", "tkđư"]],
   [L.HSKH_IMPORT, ["tên người đại diện", "tên đơn vị", "mã số thuế gtgt"]],
@@ -605,9 +605,10 @@ function xuLyXuatKM(b, sc, bangThue, kh, cfg, tu, den, cb) {
 
 function xuLyVoucher(b, bangThue, kh, cfg, tu, den, cb) {
   if (!b || !b.n) return [];
-  const ma = S(cot(b, "Mã số")), tkNo = S(cot(b, "mstk")), tkCo = tkNo.map(t => String(cfg.tk_no_sang_tk_co[t] ?? ""));
+  const tk1 = S(cot(b, "mstk", false)), tk2 = S(cot(b, "tk Nợ", false)), tk3 = S(cot(b, "mstk_goc", false));
+  const ma = S(cot(b, "Mã số")), tkNo = tk1.map((t, i) => t || tk2[i] || tk3[i]), tkCo = tkNo.map(t => String(cfg.tk_no_sang_tk_co[t] ?? ""));
   const pl = tkNo.map((a, i) => phanLoai(a, tkCo[i], cfg));
-  const mshh = S(cot(b, "Mshh")), congVat = pl.map(p => cfg.phan_loai_cong_vat.includes(p));
+  const mshh = S(cot(b, "Mshh", "MSHH voucher", false)), congVat = pl.map(p => cfg.phan_loai_cong_vat.includes(p));
   const ts = thueSuat(mshh, bangThue, new Array(b.n).fill(0), "Voucher", cb, congVat);
   const tien = N(cot(b, "Số tiền")), ng = cot(b, "Ngày ghi sổ").map(ngay);
   const msdv = S(cot(b, "MSDV", false)), px = S(cot(b, "Phiếu xuất"));

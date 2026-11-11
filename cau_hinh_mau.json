@@ -42,6 +42,11 @@
     ],
     [
       "1312",
+      "1121",
+      "Chi TM TB KM"
+    ],
+    [
+      "1312",
       "51185",
       "Quà TB KM"
     ],
@@ -100,6 +105,7 @@
     "Xuất Bán"
   ],
   "ma_kho": "NTG01",
+  "hd_ke_bo_sung": [],
   "loc_ngay_can_tru": true,
   "loc_ngay_to_cp": true,
   "cot_ngay": {

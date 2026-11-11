@@ -7,6 +7,7 @@ Mọi quy tắc trước đây phải sửa trong công thức Excel (ánh xạ 
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
@@ -47,6 +48,7 @@ class Config:
         ["335", "*", "CKTT"],
         ["635", "*", "CKTT"],
         ["1312", "1311", "Chi TM TB KM"],
+        ["1312", "1121", "Chi TM TB KM"],   # chi tiền KM trưng bày qua ngân hàng (Tổ CP, phiếu PCN)
         ["1312", "51185", "Quà TB KM"],
         ["33871", "51185", "Quà TB CLB"],
         ["6418", "15614", "Quà tặng KH (CP)"],
@@ -75,6 +77,9 @@ class Config:
     })
     pl_km_khong_tinh: list = field(default_factory=lambda: ["Xuất Bán"])
     ma_kho: str = "NTG01"           # để trống = lấy mọi kho
+    # Số HĐ thuộc kỳ trước nhưng bị sót (vd BDC điều chỉnh ngày cuối tháng) → kê bổ sung vào kỳ đang tính.
+    # Danh sách hoặc chuỗi cách nhau bằng ; , hoặc xuống dòng. Vd: "1C26TNG|00037622"
+    hd_ke_bo_sung: list = field(default_factory=list)
 
     # --- Lọc theo kỳ (tháng/năm lấy từ NGÀY CHỨNG TỪ / NGÀY HÓA ĐƠN) ---
     loc_ngay_can_tru: bool = True
@@ -93,6 +98,13 @@ class Config:
     # 33882 / *  : chi lại tiền CKTT (đã đưa vào TK 33882) – không tính thuế.
     # TK Có "*" = bất kỳ.
     cap_tk_khong_tinh: list = field(default_factory=lambda: [["6418", "1121"], ["33882", "*"]])
+
+    @property
+    def ds_hd_ke_bo_sung(self) -> list[str]:
+        v = self.hd_ke_bo_sung or []
+        if isinstance(v, str):
+            v = re.split(r"[;,\n\r\t ]+", v)
+        return list(dict.fromkeys(str(x).strip() for x in v if str(x).strip()))
 
     @property
     def ty_le_tong(self) -> float:

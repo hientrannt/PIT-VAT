@@ -105,6 +105,7 @@ summary { cursor: pointer; }
       <label for="tuyChon" style="flex-direction:row;align-items:center;gap:6px;color:var(--ink)"><input id="tuyChon" type="checkbox"> Khoảng ngày</label>
       <label for="tu" class="kn" hidden>Từ ngày<input id="tu" type="date"></label>
       <label for="den" class="kn" hidden>Đến ngày<input id="den" type="date"></label>
+      <label for="keBoSung" title="Số HĐ kho (phần Cường) thuộc kỳ trước nhưng bị sót, cách nhau dấu ; – sẽ được tính vào kỳ này">HĐ kê bổ sung (sót kỳ trước)<input id="keBoSung" type="text" placeholder="vd 1C26TNG|00037622" style="min-width:220px"></label>
     </div>
   </header>
 
@@ -183,7 +184,7 @@ const CFG_MAC_DINH = {
   tk_no_sang_tk_co: { "1312": "51185", "33871": "51185", "6418": "15614", "335": "15614", "33412": "33311" },
   bang_phan_loai: [
     ["335", "15614", "Quà tặng KH (CP)"], ["335", "*", "CKTT"], ["635", "*", "CKTT"],
-    ["1312", "1311", "Chi TM TB KM"], ["1312", "51185", "Quà TB KM"], ["33871", "51185", "Quà TB CLB"],
+    ["1312", "1311", "Chi TM TB KM"], ["1312", "1121", "Chi TM TB KM"], ["1312", "51185", "Quà TB KM"], ["33871", "51185", "Quà TB CLB"],
     ["6418", "15614", "Quà tặng KH (CP)"], ["33412", "33311", "Quà Xuất tặng NV"],
     ["52111", "*", "Chi TM TB CLB"], ["52112", "*", "Chi TM TB CLB"]
   ],
@@ -193,6 +194,7 @@ const CFG_MAC_DINH = {
   loai_kho: { "0": "Xuất Bán", "1": "Xuất Khuyến Mãi", "10": "Xuất Tặng" },
   pl_km_khong_tinh: ["Xuất Bán"],
   ma_kho: "NTG01",
+  hd_ke_bo_sung: [],
   loc_ngay_can_tru: true, loc_ngay_to_cp: true,
   cot_ngay: {
     CAN_TRU: ["Ngày chứng từ", "Ngày ghi sổ"], CHI: ["Ngày chứng từ", "Ngày ghi sổ"],
@@ -330,11 +332,24 @@ function laFileChi(ten, sheet, bang) {
     if (v.length && v.filter(x => x === "PC").length / v.length > 0.5) return true; }
   return false;
 }
+/* Một số phần mềm xuất file ghi sai vùng dữ liệu (vd "A1:AF9" trong khi có ~30.000 dòng);
+   SheetJS chỉ đọc trong vùng khai báo → tính lại vùng theo các ô thực có. */
+function suaVung(ws) {
+  if (!ws) return;
+  let r1 = -1, c1 = -1;
+  const data = Array.isArray(ws) ? ws : ws["!data"];
+  if (data) data.forEach((row, r) => { if (!row) return; for (let c = row.length - 1; c >= 0; c--) if (row[c] != null) { r1 = Math.max(r1, r); c1 = Math.max(c1, c); break; } });
+  else for (const k in ws) { if (k[0] === "!") continue; const a = XLSX.utils.decode_cell(k); if (a.r > r1) r1 = a.r; if (a.c > c1) c1 = a.c; }
+  if (r1 < 0) return;
+  const cu = ws["!ref"] ? XLSX.utils.decode_range(ws["!ref"]) : { s: { r: 0, c: 0 }, e: { r: 0, c: 0 } };
+  ws["!ref"] = XLSX.utils.encode_range({ s: { r: Math.min(cu.s.r, 0), c: Math.min(cu.s.c, 0) }, e: { r: Math.max(cu.e.r, r1), c: Math.max(cu.e.c, c1) } });
+}
 function docWorkbook(buf, ten) {
   const laCsv = /\.(csv|txt)$/i.test(ten);
   const wb = XLSX.read(buf, { type: "array", cellDates: false, cellText: false, cellNF: false, dense: true, raw: laCsv, codepage: 65001 });
   const kq = [];
   for (const sheet of wb.SheetNames) {
+    suaVung(wb.Sheets[sheet]);
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { header: 1, raw: true, defval: null, blankrows: false });
     if (!rows.length) continue;
     const [loai, dong] = nhanDien(rows);
@@ -393,7 +408,10 @@ const COT_KQ = ["Người phụ trách", "Mã số KH", "Họ và tên KH", "Tê
 const COT_TIEN = COT_KQ.slice(6, 12);
 const COT_ALL = COT_KQ.concat(["Nguồn", "Ghi chú (Mã HH - Tên HH)"]);
 const COT_KHO = ["Mã CN", "Mã KH", "Tên KH", "Tên đơn vị", "Số HĐ", "Ngày HĐ", "Ngày giao", "Loại", "Mã HH", "Tên HH",
-  "PL KM", "Chịu thuế", "PL", "VAT %", "TT giá gốc", "T.Tiền thuế", "TT tính thuế", "Số tiền chi", "Thuế 1%", "Thuế 0.5%", "Tổng thuế"];
+  "PL KM", "Chịu thuế", "PL", "VAT %", "TT giá gốc", "T.Tiền thuế", "TT tính thuế", "Số tiền chi", "Thuế 1%", "Thuế 0.5%", "Tổng thuế", "Ghi chú"];
+const GHI_CHU_BO_SUNG = "Kê bổ sung (sót kỳ trước)";
+const dsHdBoSung = cfg => { const v = cfg.hd_ke_bo_sung || []; const a = Array.isArray(v) ? v : String(v).split(/[;,\n\r\t ]+/);
+  return [...new Set(a.map(x => String(x).trim()).filter(Boolean))]; };
 const COT_SO_KHO = ["PL", "VAT %", "TT giá gốc", "T.Tiền thuế", "TT tính thuế", "Số tiền chi", "Thuế 1%", "Thuế 0.5%", "Tổng thuế"];
 const COT_NGAY = ["Ngày ghi sổ", "Ngày HĐ", "Ngày giao"];
 
@@ -523,7 +541,10 @@ function baoNgayLoi(du, cfg, cb) {
     const b = du[loai]; if (!b || !b.n) continue;
     const [nk, tnk] = ngayKy(b, cfg, loai), tho = b.cols[norm(tnk)] || new Array(b.n).fill(null);
     const vd = new Set(); let loi = 0, trong = 0;
-    nk.forEach((d, i) => { if (d != null) return; if (chuoi(tho[i]) !== "") { loi++; if (vd.size < 8) vd.add(chuoi(tho[i])); } else trong++; });
+    // dòng chân trang (chữ ký "Giám đốc chi nhánh / Kế toán trưởng"...) không phải dữ liệu → không báo
+    const keys = Object.keys(b.cols).filter(k => !k.startsWith("__"));
+    const coDuLieu = i => keys.reduce((s, k) => s + (chuoi(b.cols[k][i]) !== "" ? 1 : 0), 0) >= 3;
+    nk.forEach((d, i) => { if (d != null) return; if (chuoi(tho[i]) !== "") { loi++; if (vd.size < 8) vd.add(chuoi(tho[i])); } else if (coDuLieu(i)) trong++; });
     if (loi) cb.push({ muc: "NGÀY", noi_dung: `${TEN_LOAI[loai]}: ${loi.toLocaleString("vi-VN")} dòng có cột “${tnk}” không đọc được thành ngày, ví dụ: ${[...vd].join(" | ")}`,
       so_dong: loi, hau_qua: "Các dòng này không xác định được tháng → bị loại. Gửi mẫu này để bổ sung cách đọc." });
     if (trong) cb.push({ muc: "NGÀY", noi_dung: `${TEN_LOAI[loai]}: ${trong.toLocaleString("vi-VN")} dòng để trống cột “${tnk}”`, so_dong: trong, hau_qua: "Không xác định được tháng → bị loại" });
@@ -647,7 +668,8 @@ function xuLyVoucher(b, bangThue, kh, cfg, tu, den, cb) {
   const msdv = S(cot(b, "MSDV", false)), px = S(cot(b, "Phiếu xuất"));
   const mact = S(cot(b, "Mã CTKM", false)), tenct = S(cot(b, "Tên CTKM", false));
   const info = traKH(ma, kh), hkd = info.map(x => laHKD(x.ploai, cfg));
-  baoKHThieu(ma, info, b, "Voucher", cb, pl.map(p => p !== ""), ["Tên KH", "Người thanh toán"]);
+  // chỉ báo thiếu HSKH cho dòng có TK thuộc danh sách tính thuế (TK 33412 tặng nhân viên: mã KH là mã NV)
+  baoKHThieu(ma, info, b, "Voucher", cb, tkNo.map(t => cfg.tk_no_loc_xuat.map(String).includes(t)), ["Tên KH", "Người thanh toán"]);
   baoTKMoi(tkNo, tkCo, pl, hkd, "Voucher", cb, cfg.tk_no_loc_xuat.map(String));
   const loc = cfg.tk_no_loc_xuat.map(String), out = [];
   const [nk, tnk] = ngayKy(b, cfg, L.VOUCHER);
@@ -674,7 +696,19 @@ function xuLyKho(b, kh, cfg, tu, den, cb) {
   const maKho = S(cot(b, "Mã kho", false));
   const [nk, tnk] = ngayKy(b, cfg, L.KHO);
   const idx = [], ngoaiKy = nk.map(d => !trongKy(d, tu, den)), khacKho = maKho.map(k => dsKho.length > 0 && !dsKho.includes(k));
-  for (let i = 0; i < b.n; i++) if (!ngoaiKy[i] && !khacKho[i]) idx.push(i);
+  /* HĐ kê bổ sung: dòng ngoài kỳ nhưng số HĐ nằm trong danh sách → đưa vào kỳ này */
+  const dsBS = dsHdBoSung(cfg), soHDAll = S(cot(b, "Số hóa đơn", false));
+  const boSung = soHDAll.map((h, i) => dsBS.includes(h) && ngoaiKy[i] && !khacKho[i]);
+  if (dsBS.length) {
+    const co = new Set(soHDAll.filter(h => dsBS.includes(h)));
+    const khongThay = dsBS.filter(h => !co.has(h));
+    if (khongThay.length) cb.push({ muc: "KÊ BỔ SUNG", noi_dung: "Số HĐ kê bổ sung không có trong dữ liệu kho: " + khongThay.join("; "),
+      so_dong: khongThay.length, hau_qua: "Không kê bổ sung được – kiểm tra lại số HĐ / file kho" });
+    const trongKySan = dsBS.filter(h => co.has(h) && !soHDAll.some((x, i) => x === h && boSung[i]));
+    if (trongKySan.length) cb.push({ muc: "KÊ BỔ SUNG", noi_dung: "Số HĐ kê bổ sung đã thuộc kỳ đang tính: " + trongKySan.join("; "),
+      so_dong: trongKySan.length, hau_qua: "Đã được tính bình thường – không cần kê bổ sung" });
+  }
+  for (let i = 0; i < b.n; i++) if ((!ngoaiKy[i] || boSung[i]) && !khacKho[i]) idx.push(i);
   const khoKhac = new Map(); maKho.forEach((k, i) => { if (khacKho[i] && !ngoaiKy[i]) khoKhac.set(k, (khoKhac.get(k) || 0) + 1); });
   if (khoKhac.size) cb.push({ muc: "KHO", noi_dung: "Dữ liệu kho: có dòng thuộc kho khác " + dsKho.join(", ") + ": " +
     [...khoKhac].map(([k, v]) => `${k || "(trống)"} (${v.toLocaleString("vi-VN")} dòng)`).join(", "),
@@ -701,19 +735,24 @@ function xuLyKho(b, kh, cfg, tu, den, cb) {
     const r = { "Mã CN": maCN[i], "Mã KH": ma[i], "Tên KH": tenKH[i] || info[i].ten_kh, "Tên đơn vị": tenDV[i] || info[i].ten_dv,
       "Số HĐ": soHD[i], "Ngày HĐ": ngHD[i], "Ngày giao": ngG[i], "Loại": loai, "Mã HH": maHH[i], "Tên HH": tenHH[i],
       "PL KM": plKm, "Chịu thuế": info[i].ploai || "NA", "PL": pl, "VAT %": vatPt[i], "TT giá gốc": goc[i],
-      "T.Tiền thuế": thue, "TT tính thuế": tt, "Số tiền chi": chi, "Thuế 1%": t1, "Thuế 0.5%": t5, "Tổng thuế": t1 + t5 };
+      "T.Tiền thuế": thue, "TT tính thuế": tt, "Số tiền chi": chi, "Thuế 1%": t1, "Thuế 0.5%": t5, "Tổng thuế": t1 + t5,
+      "Ghi chú": boSung[idx[i]] ? GHI_CHU_BO_SUNG : "" };
     ct.push(r);
     if (pl === 1 && !khong) tong.push({ "Người phụ trách": cfg.nguoi_phu_trach_kho, "Mã số KH": r["Mã KH"],
       "Họ và tên KH": r["Tên KH"], "Tên Quầy Thuốc/Nhà Thuốc/Tổ chức": r["Tên đơn vị"],
       "Mã số thuế (nếu có)": info[i].mst, "Số CMND": info[i].cccd, "Số tiền sổ sách": goc[i], "Số tiền VAT": thue,
       "Số tiền chi (giá thị trường đã có VAT)": tt, "Số tiền Kê khai": chi, "Tiền thuế GTGT": t1, "Tiền thuế TNCN": t5,
       "Đơn vị": maCN[i], "Số chứng từ": soHD[i], "Ngày ghi sổ": ngG[i], "TK Nợ": "", "TK Có": "", "Phân Loại": plKm,
-      "Mã CTKM": "", "Tên CTKM": "", "Nguồn": cfg.nguon_kho, "Ghi chú (Mã HH - Tên HH)": maHH[i] + " - " + tenHH[i] });
+      "Mã CTKM": "", "Tên CTKM": "", "Nguồn": cfg.nguon_kho,
+      "Ghi chú (Mã HH - Tên HH)": (r["Ghi chú"] ? r["Ghi chú"] + " | " : "") + maHH[i] + " - " + tenHH[i] });
   }
   const sub2 = (arr) => { const a = new Array(b.n).fill(false); idx.forEach((i, j) => a[i] = arr[j]); return a; };
-  chanDoan(cb, "Dữ liệu kho (Cường)", [...lyDoNgay(nk, tnk, tu, den), ["Khác mã kho đang chọn", khacKho],
+  chanDoan(cb, "Dữ liệu kho (Cường)", [...lyDoNgay(nk, tnk, tu, den).map(([nh, m]) => [nh, m.map((x, i) => x && !boSung[i])]), ["Khác mã kho đang chọn", khacKho],
     ["Xuất Bán (không tính thuế)", sub2(ct.map(r => cfg.pl_km_khong_tinh.includes(r["PL KM"])))],
     ["Mã KH không có trong HSKH", sub2(info.map(x => x.ploai === ""))], ["KH không phải hộ kinh doanh", sub2(ct.map(r => r.PL !== 1))]], nk, tu, den, tnk);
+  const nBS = ct.filter(r => r["Ghi chú"] && r.PL === 1 && !cfg.pl_km_khong_tinh.includes(r["PL KM"])).length;
+  if (nBS) { const ds = cb.chan_doan; let j = -1; ds.forEach((d, k) => { if (d[0] === "Dữ liệu kho (Cường)" && d[1].startsWith("✔")) j = k; });
+    ds.splice(j + 1, 0, ["Dữ liệu kho (Cường)", "  trong đó " + GHI_CHU_BO_SUNG, nBS]); }
   return [ct, tong];
 }
 
@@ -898,6 +937,8 @@ let cfg = (() => { try { const s = store.get("thueHkdCfg"); if (!s) return struc
   const c = { ...CFG_MAC_DINH, ...JSON.parse(s) };
   /* cấu hình cũ đã lưu: bổ sung các cặp TK không tính mới của mặc định */
   CFG_MAC_DINH.cap_tk_khong_tinh.forEach(p => { if (!c.cap_tk_khong_tinh.some(q => q[0] === p[0] && q[1] === p[1])) c.cap_tk_khong_tinh.push(p); });
+  /* … và các dòng phân loại TK mới (vd 1312/1121 "Chi TM TB KM") */
+  CFG_MAC_DINH.bang_phan_loai.forEach(p => { if (!c.bang_phan_loai.some(q => q[0] === p[0] && q[1] === p[1])) c.bang_phan_loai.push(p); });
   return c; } catch (e) { return structuredClone(CFG_MAC_DINH); } })();
 let bangs = [], loiDoc = [], ketQua = null, tabHien = "tat_ca";
 const dangMau = () => bangs.length > 0 && bangs.every(b => b.mau);
@@ -915,7 +956,7 @@ function khoiTao() {
   const now = new Date(); let m = now.getMonth(), y = now.getFullYear(); if (m === 0) { m = 12; y--; }
   $("thang").value = m; $("nam").value = y;
   $("cfgText").value = JSON.stringify(cfg, null, 2);
-  ["thang", "nam", "tu", "den"].forEach(id => $(id).addEventListener("change", () => { if (dangMau()) napMau(); else tinhLai(); }));
+  ["thang", "nam", "tu", "den", "keBoSung"].forEach(id => $(id).addEventListener("change", () => { if (dangMau()) napMau(); else tinhLai(); }));
   $("tuyChon").addEventListener("change", () => { document.querySelectorAll(".kn").forEach(e => e.hidden = !$("tuyChon").checked);
     if ($("tuyChon").checked && !$("tu").value) { const [a, b] = kyHienTai(); $("tu").value = isoDate(a); $("den").value = isoDate(b); } tinhLai(); });
   $("chonFile").addEventListener("click", () => $("fileInput").click());
@@ -997,7 +1038,8 @@ function tinhLai() {
   veBangFile();
   const [tu, den] = kyHienTai();
   $("kyText").textContent = `· ${serialStr(tu)} → ${serialStr(den)}`;
-  try { const trung = []; ketQua = tinh(gopTheoLoai(bangs, trung), tu, den, cfg); ketQua.canh_bao.unshift(...trung); }
+  try { const trung = [], c = $("keBoSung").value.trim() ? { ...cfg, hd_ke_bo_sung: $("keBoSung").value } : cfg;
+    ketQua = tinh(gopTheoLoai(bangs, trung), tu, den, c); ketQua.canh_bao.unshift(...trung); }
   catch (e) { ketQua = null; $("loiDoc").textContent = "Lỗi khi tính: " + e.message; }
   veKetQua();
 }

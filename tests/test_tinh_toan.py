@@ -59,10 +59,14 @@ def bo_file(tmp_path):
                       "NgayGS": ["12/09/2026", "13/09/2026", "12/09/2026", "12/09/2026"],
                       "Madv": ["NTG"] * 4, "Maso Ctkm": ["CT1"] * 4, "Ten Ctkm": ["CLB"] * 4})
     km = pd.DataFrame(km_cols)
-    voucher = pd.DataFrame({"Phiếu xuất": ["PXV1", "PXV2", "PXV3"], "Mshh": ["VC1", "VC1", "VC1"],
-                            "Ngày ghi sổ": ["09/09/2026", "09/10/2026", "09/09/2026"], "MSDV": ["NTG"] * 3,
-                            "mstk": ["6418", "6418", "33412"], "Số tiền": [500000, 500000, 500000],
-                            "Mã số": ["KH2", "KH2", "NV9"], "Mã CTKM": ["SN"] * 3, "Tên CTKM": ["Sinh nhật"] * 3})
+    voucher = pd.DataFrame({"Phiếu xuất": ["PXV1", "PXV2", "PXV3", "PXV4", None],
+                            "Mshh": ["VC1", "VC1", "VC1", "VC1", None],
+                            "Ngày ghi sổ": ["09/09/2026", "09/10/2026", "09/09/2026", "09/09/2026", None],
+                            "MSDV": ["NTG"] * 4 + ["Giám đốc chi nhánh"],          # dòng cuối = chân trang chữ ký
+                            "mstk": ["6418", "6418", "33412", "6418", None],
+                            "Số tiền": [500000, 500000, 500000, 500000, None],
+                            "Mã số": ["KH2", "KH2", "NV9", "KH9", None], "Mã CTKM": ["SN"] * 4 + [None],
+                            "Tên CTKM": ["Sinh nhật"] * 4 + ["Kế toán trưởng"]})
     so_quy = pd.DataFrame({"Phiếu chi\n hạch toán": ["BTH/1", "PTN/2", "BTH/3"],
                            "Ngày ghi sổ": ["21/09/2026"] * 3, "msdv": ["NTG"] * 3,
                            "mstk": ["1312", "1121", "1312"], "Số tiền": [1000000, 999, 2000000],
@@ -133,7 +137,11 @@ def test_tinh_day_du(bo_file, tmp_path):
 
     muc = {(c.muc, c.noi_dung.split(":")[0]) for c in kq.canh_bao}
     assert ("SỔ CÁI", "Xuất KM") in muc
-    assert ("HSKH", "Voucher") in muc
+    # Voucher: chỉ báo KH9 (TK 6418) thiếu HSKH; NV9 (TK 33412 tặng nhân viên) không báo
+    hskh_vc = [c for c in kq.canh_bao if c.muc == "HSKH" and c.noi_dung.startswith("Voucher")]
+    assert len(hskh_vc) == 1 and hskh_vc[0].chi_tiet["MSKH"].tolist() == ["KH9"]
+    # dòng chân trang chữ ký không bị báo là "để trống ngày"
+    assert not any(c.muc == "NGÀY" and c.noi_dung.startswith("Voucher") for c in kq.canh_bao)
 
     out = tmp_path / "kq.xlsx"
     ghi_excel(kq, out)
@@ -183,3 +191,42 @@ def test_tu_chon_ky_va_bo_trung(bo_file, tmp_path):
 ])
 def test_ngay_dang_chu(v, kq):
     assert ngay(v) == kq
+
+
+def test_to_cp_chi_tb_km_qua_ngan_hang(tmp_path):
+    """Tổ CP: phiếu PCN (TK Có 1121) chi tiền KM trưng bày TK Nợ 1312 cho HKD → tính thuế; 6418/1121, 33882 thì không."""
+    hskh = pd.DataFrame({"Số": ["KH1"], "Tên Khách Hàng": ["Nguyễn A"], "Tên Đơn Vị": ["NT An"],
+                         "MST": ["111"], "CCCD": ["0011"], "PLoai (theo VAT/TNCN)": [HKD]})
+    chi = pd.DataFrame({"Phiếu chi hạch toán": ["PCN/1", "PCN/2", "PCN/3"],
+                        "Ngày chứng từ": ["05/09/2026"] * 3, "Ngày ghi sổ": ["05/09/2026"] * 3, "msdv": ["NTG"] * 3,
+                        "mstk": ["1312", "6418", "33882"], "Số tiền": [200000, 300000, 400000],
+                        "Mã số": ["KH1"] * 3})
+    files = [_ghi(tmp_path, "HSKH.xlsx", hskh), _ghi(tmp_path, "T09_DATA_CHI.xlsx", chi)]
+    kq, _ = chay(files, TU, DEN)
+    assert kq.to_cp["Số chứng từ"].tolist() == ["PCN/1"]
+    assert kq.to_cp["Phân Loại"].tolist() == ["Chi TM TB KM"]
+    assert kq.to_cp["Số tiền Kê khai"].tolist() == [lam_tron(200000 / 0.985)]
+    assert not any(c.muc == "TÀI KHOẢN" for c in kq.canh_bao)
+
+
+def test_ke_bo_sung_hd_kho(bo_file):
+    """HĐ kho thuộc kỳ trước bị sót (BDC ngày 30/09) → kê bổ sung vào kỳ 10 khi nhập số HĐ."""
+    T10 = (date(2026, 10, 1), date(2026, 10, 31))
+    kq, _ = chay(bo_file, *T10)
+    assert len(kq.kho) == 0
+    cfg = Config()
+    cfg.hd_ke_bo_sung = "K2; K_KHONG_CO"          # chuỗi cách nhau dấu ; cũng được
+    kq, _ = chay(bo_file, *T10, cfg)
+    assert kq.kho["Số chứng từ"].tolist() == ["K2"]
+    assert kq.kho["Số tiền Kê khai"].tolist() == [-1439086]
+    assert kq.kho["Ghi chú (Mã HH - Tên HH)"].iloc[0].startswith("Kê bổ sung (sót kỳ trước)")
+    assert kq.kho_chi_tiet.loc[kq.kho_chi_tiet["Số HĐ"] == "K2", "Ghi chú"].tolist() == ["Kê bổ sung (sót kỳ trước)"]
+    assert any(c.muc == "KÊ BỔ SUNG" and "K_KHONG_CO" in c.noi_dung for c in kq.canh_bao)
+    cd = kq.chan_doan[kq.chan_doan["Nguồn"] == "Dữ liệu kho (Cường)"]
+    assert (cd["Kết quả"].str.contains("trong đó Kê bổ sung") & (cd["Số dòng"] == 1)).any()
+    # HĐ đã thuộc kỳ đang tính: không tính 2 lần, chỉ nhắc
+    cfg.hd_ke_bo_sung = ["K1"]
+    kq9, _ = chay(bo_file, TU, DEN, cfg)
+    kq9_goc, _ = chay(bo_file, TU, DEN)
+    assert len(kq9.kho) == len(kq9_goc.kho)
+    assert any(c.muc == "KÊ BỔ SUNG" and "đã thuộc kỳ" in c.noi_dung for c in kq9.canh_bao)

@@ -2,6 +2,7 @@
 
 Ví dụ:
     python cli.py --thang 9 --nam 2026 "D:/Thue HKD/T9" -o "D:/Thue HKD/KetQua_T9.xlsx"
+    python cli.py --thang 10 --nam 2026 "D:/Thue HKD" --ke-bo-sung "1C26TNG|00037622"
     python cli.py --tu 2026-09-01 --den 2026-09-30 file1.xlsx file2.xlsb ...
 """
 from __future__ import annotations
@@ -23,6 +24,8 @@ def main(argv=None) -> int:
     ap.add_argument("--tu", type=date.fromisoformat, help="Từ ngày (yyyy-mm-dd)")
     ap.add_argument("--den", type=date.fromisoformat, help="Đến ngày (yyyy-mm-dd)")
     ap.add_argument("--cau-hinh", help="File cấu hình .json (tùy chọn)")
+    ap.add_argument("--ke-bo-sung", help="Số HĐ kho sót kỳ trước cần kê bổ sung vào kỳ này, cách nhau dấu ; "
+                                         '(vd "1C26TNG|00037622")')
     ap.add_argument("-o", "--output", help="File kết quả .xlsx")
     a = ap.parse_args(argv)
 
@@ -34,6 +37,8 @@ def main(argv=None) -> int:
         tu = den = None   # tự lấy tháng/năm theo ngày chứng từ / ngày hóa đơn trong dữ liệu
 
     cfg = Config.from_json(a.cau_hinh)
+    if a.ke_bo_sung:
+        cfg.hd_ke_bo_sung = a.ke_bo_sung
     files = liet_ke_file(a.duong_dan)
     if not files:
         print("Không tìm thấy file Excel/CSV nào.", file=sys.stderr)

@@ -36,6 +36,8 @@ with st.sidebar:
         tu = st.date_input("Từ ngày", ky_thang(thang_truoc, nam_mac_dinh)[0], format="DD/MM/YYYY")
         den = st.date_input("Đến ngày", ky_thang(thang_truoc, nam_mac_dinh)[1], format="DD/MM/YYYY")
     st.write(f"Kỳ: **{tu:%d/%m/%Y} → {den:%d/%m/%Y}**")
+    hd_bs = st.text_area("HĐ kê bổ sung – sót kỳ trước (phần Cường, cách nhau dấu ;)", "",
+                         help="Số hóa đơn thuộc kỳ trước nhưng chưa kê (vd 1C26TNG|00037622) → tính vào kỳ này")
 
     st.header("Cấu hình")
     f_cfg = st.file_uploader("File cấu hình .json (không bắt buộc)", type=["json"])
@@ -47,6 +49,8 @@ with st.sidebar:
         cfg.nguoi_phu_trach_kho = st.text_input("Người phụ trách kho", cfg.nguoi_phu_trach_kho)
         cfg.loc_ngay_can_tru = st.checkbox("Lọc Cấn trừ theo kỳ", cfg.loc_ngay_can_tru)
         cfg.loc_ngay_to_cp = st.checkbox("Lọc Tổ CP theo kỳ", cfg.loc_ngay_to_cp)
+    if hd_bs.strip():
+        cfg.hd_ke_bo_sung = hd_bs
     st.download_button("Tải cấu hình hiện tại (.json)", cfg.to_json().encode("utf-8"),
                        "cau_hinh.json", "application/json")
 

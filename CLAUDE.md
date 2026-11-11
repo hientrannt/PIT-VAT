@@ -22,8 +22,28 @@ Người dùng: kế toán, giao tiếp bằng tiếng Việt. Dữ liệu thậ
 * Đã đối chiếu tháng 09/2026 với file Excel gốc: khớp 5.849/5.849 dòng
   (Tổ DT 2.806 dòng, KK 624.526.712; Cường 3.043 dòng, KK 578.243.533; tổng KK 1.202.770.245, GTGT 12.027.688, TNCN 6.013.263).
 
-## Việc đang dở (ưu tiên)
-1. Người dùng chạy trên dữ liệu thật thấy **Voucher = 0** (Tổ DT chỉ còn 2.736 dòng = riêng Xuất KM) và **cấn trừ sai/thiếu**.
-   → Chạy `python cli.py "<thư mục dữ liệu thật>"`, xem phần KIỂM TRA DỮ LIỆU / LƯU Ý, mở file voucher thật xem tên cột,
-   định dạng ngày, mã KH; sửa cho đúng ở CẢ Python và web; thêm test.
-2. Hỏi người dùng số phiếu cụ thể nếu vẫn lệch.
+## Tình trạng (11/11/2026, chạy trên dữ liệu thật – 9 file trong thư mục 2026_Thue HKD)
+* Tháng 09: khớp Excel gốc (Tổ DT 2.806 = Xuất KM 2.736 + Voucher 70; Cấn trừ 0; Cường 3.043). Tổ CP 264 dòng, KK 57.614.359
+  (CKTT T09 chi qua ngân hàng PCN, TK 635/335).
+* Tháng 10: Tổ DT 1.256 (Cấn trừ 403, Xuất KM 776, Voucher 77) KK 242.083.989; Tổ CP 0 (chỉ có 33882 và 6418/1121 → không tính);
+  Cường 2.980 KK 607.996.893; tổng KK 850.080.882, GTGT 8.500.928, TNCN 4.250.451.
+* Cấn trừ tháng 09 = 0 là đúng dữ liệu: chỉ 4 dòng BTH, đều là công ty (0680/00004, 0583/00143).
+* Voucher TK 33412 = tặng nhân viên (mã KH là mã NV) → không tính, không báo thiếu HSKH. Dòng chữ ký cuối file không báo lỗi ngày.
+
+* 11/11/2026 người dùng chốt: Tổ CP **TK Nợ 1312 / TK Có 1121** ("Chi tiền khuyến mãi TB" chi qua NH) → TÍNH THUẾ,
+  phân loại "Chi TM TB KM" (đã thêm vào config.py, web, cau_hinh_mau.json). Thêm 434 dòng ở T01/T02/T06/T07; T09, T10 không đổi.
+
+* File Excel đối chiếu của người dùng: `.../03. KẾ TOÁN - CHỨNG TỪ/KPI/Năm 2026/2026.10_KPI -  Báo cáo/2026.10_Tiêu chí KPI_Ngày 1 hàng tháng/`
+  (`2026.10_NTG_Tập hợp thuế Hộ Kinh Doanh _Tổ Doanh Thu.xlsx` = Tổ DT T10; `..._GỘP 3 TỔ ....xlsb` sheet ThueHkdKho01 = Cường T10).
+  Tháng 10 khớp TỪNG DÒNG: Tổ DT 1.256 (KK 242.083.989), Cường 2.981 (KK 606.557.807, thuế 9.098.469), Tổ CP 0.
+* **HĐ kê bổ sung (sót kỳ trước)** – như ô "HĐ kê bổ sung" trong sheet ThueHkdKho01: số HĐ kho ngoài kỳ được tính vào kỳ này,
+  ghi chú "Kê bổ sung (sót kỳ trước)". Config `hd_ke_bo_sung`, CLI `--ke-bo-sung "1C26TNG|00037622"`, ô nhập trên Streamlit & web.
+  T10 cần kê bổ sung 1C26TNG|00037622 (BDC ngày 30/09, −1.439.086) vì bảng kê T09 đã nộp không có dòng này.
+* Lưu ý: file 2026.09 (bảng kê T09 đã nộp, Sheet2) tính "Quà tặng KH (CP)" theo giá ĐÃ CÓ VAT (KK Tổ DT 651.199.445);
+  từ file 2026.10 trở đi (và phần mềm) tính theo giá TRƯỚC VAT (624.526.712). Người dùng chưa xác nhận cách nào đúng cho T09.
+
+## Việc đang dở
+1. 11/11: ĐÃ chạy bản web (Node + SheetJS 0.18.5) trên 9 file thật: khớp Python T01/02/06/07/09/10. Lỗi cũ: file Bảng cấn trừ/kê chi/voucher
+   ghi sai vùng (!ref "A1:AF9") → SheetJS chỉ đọc 5 dòng; đã thêm `suaVung()` tính lại vùng theo ô thực có. Cấu hình cũ lưu trong
+   localStorage được bổ sung các dòng `bang_phan_loai` mới.
+2. Còn 2 dòng HKD TK 1331/1121 (thuế GTGT đầu vào) ở Tổ CP – chưa tính, có thể hỏi người dùng nếu cần.

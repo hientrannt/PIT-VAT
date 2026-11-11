@@ -26,8 +26,9 @@ COT_ALL = COT_KQ + ["Nguồn", "Ghi chú (Mã HH - Tên HH)"]
 COT_KHO = [
     "Mã CN", "Mã KH", "Tên KH", "Tên đơn vị", "Số HĐ", "Ngày HĐ", "Ngày giao", "Loại",
     "Mã HH", "Tên HH", "PL KM", "Chịu thuế", "PL", "VAT %", "TT giá gốc", "T.Tiền thuế",
-    "TT tính thuế", "Số tiền chi", "Thuế 1%", "Thuế 0.5%", "Tổng thuế",
+    "TT tính thuế", "Số tiền chi", "Thuế 1%", "Thuế 0.5%", "Tổng thuế", "Ghi chú",
 ]
+GHI_CHU_BO_SUNG = "Kê bổ sung (sót kỳ trước)"
 
 
 class ThieuCot(Exception):
@@ -247,7 +248,8 @@ def _bao_ngay_loi(du_lieu: dict, cfg: Config, cb) -> None:
         nk, tnk = ngay_ky(df, cfg, loai)
         tho = _cot_ngay_tho(df, tnk)
         loi = nk.isna() & tho.map(lambda v: chuoi(v) != "")
-        trong = nk.isna() & ~loi
+        # dòng chân trang (chữ ký "Giám đốc chi nhánh / Kế toán trưởng"...) không phải dữ liệu → không báo
+        trong = nk.isna() & ~loi & _co_du_lieu(df)
         if loi.any():
             vd = list(dict.fromkeys(tho[loi].map(chuoi)))[:8]
             cb.append(CanhBao("NGÀY", f"{L.TEN_LOAI[loai]}: {int(loi.sum()):,} dòng có cột “{tnk}” không đọc được "
@@ -256,6 +258,12 @@ def _bao_ngay_loi(du_lieu: dict, cfg: Config, cb) -> None:
         if trong.any():
             cb.append(CanhBao("NGÀY", f"{L.TEN_LOAI[loai]}: {int(trong.sum()):,} dòng để trống cột “{tnk}”",
                               int(trong.sum()), "Không xác định được tháng → bị loại"))
+
+
+def _co_du_lieu(df: pd.DataFrame, toi_thieu: int = 3) -> pd.Series:
+    """Dòng có ít nhất ``toi_thieu`` ô có giá trị (bỏ qua cột nội bộ ``__...``)."""
+    cot = [c for c in df.columns if not str(c).startswith("__")]
+    return df[cot].apply(lambda col: col.map(lambda v: chuoi(v) != "")).sum(axis=1) >= toi_thieu
 
 
 def _trong_ky(ng: pd.Series, tu: date, den: date) -> pd.Series:
@@ -507,7 +515,9 @@ def xu_ly_voucher(df: pd.DataFrame | None, bang_thue: dict, kh: pd.DataFrame, cf
     info = _tra_kh(ma, kh)
     hkd = la_hkd(info["ploai"], cfg)
 
-    _bao_kh_thieu(ma, info, df, "Voucher", canh_bao, pl != "", cot_ten=("Tên KH", "Người thanh toán"))
+    # chỉ báo thiếu HSKH cho dòng có TK thuộc danh sách tính thuế (TK 33412 tặng nhân viên: mã KH là mã NV)
+    _bao_kh_thieu(ma, info, df, "Voucher", canh_bao, tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat]),
+                  cot_ten=("Tên KH", "Người thanh toán"))
     _bao_tk_moi(tk_no, tk_co, pl, hkd, "Voucher", canh_bao, tk_loc=cfg.tk_no_loc_xuat)
 
     out = pd.DataFrame({
@@ -561,8 +571,22 @@ def xu_ly_kho(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, tu: date, 
         canh_bao.append(CanhBao("KHO", "Dữ liệu kho: có dòng thuộc kho khác " + ", ".join(ds_kho) + ": "
                                 + ", ".join(f"{k or '(trống)'} ({v:,} dòng)" for k, v in cac_kho.items()),
                                 int(cac_kho.sum()), "Bị loại – nếu cần tính, thêm mã kho vào cấu hình (ma_kho)"))
+    # HĐ kê bổ sung: dòng ngoài kỳ nhưng số HĐ nằm trong danh sách → đưa vào kỳ này
+    ds_bs = cfg.ds_hd_ke_bo_sung
+    so_hd_all = _s(_cot(df, "Số hóa đơn", bat_buoc=False))
+    bo_sung = so_hd_all.isin(ds_bs) & ngoai_ky & ~khac_kho
+    if ds_bs:
+        co = set(so_hd_all[so_hd_all.isin(ds_bs)])
+        khong_thay = [h for h in ds_bs if h not in co]
+        if khong_thay:
+            canh_bao.append(CanhBao("KÊ BỔ SUNG", "Số HĐ kê bổ sung không có trong dữ liệu kho: " + "; ".join(khong_thay),
+                                    len(khong_thay), "Không kê bổ sung được – kiểm tra lại số HĐ / file kho"))
+        trong_ky_san = [h for h in ds_bs if h in co and not bo_sung[so_hd_all == h].any()]
+        if trong_ky_san:
+            canh_bao.append(CanhBao("KÊ BỔ SUNG", "Số HĐ kê bổ sung đã thuộc kỳ đang tính: " + "; ".join(trong_ky_san),
+                                    len(trong_ky_san), "Đã được tính bình thường – không cần kê bổ sung"))
     toan_bo_ng = nk
-    loc = ~ngoai_ky & ~khac_kho
+    loc = (~ngoai_ky | bo_sung) & ~khac_kho
     df_goc = df
     df = df[loc]
     ng_giao = ng_giao[loc]
@@ -598,6 +622,7 @@ def xu_ly_kho(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, tu: date, 
         "PL KM": pl_km, "Chịu thuế": chiu, "PL": pl, "VAT %": vat_pt, "TT giá gốc": goc,
         "T.Tiền thuế": thue, "TT tính thuế": tt, "Số tiền chi": chi, "Thuế 1%": t1,
         "Thuế 0.5%": t5, "Tổng thuế": t1 + t5,
+        "Ghi chú": bo_sung[loc].map({True: GHI_CHU_BO_SUNG, False: ""}),
     }).reset_index(drop=True)
 
     chon = (ct["PL"] == 1) & ~ct["PL KM"].isin(cfg.pl_km_khong_tinh)
@@ -607,12 +632,17 @@ def xu_ly_kho(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, tu: date, 
         s.loc[idx] = v
         return s
     _chan_doan(canh_bao, "Dữ liệu kho (Cường)", [
-        *_ly_do_ngay(nk, tnk, tu, den),
+        *[(nhan, m & ~bo_sung) for nhan, m in _ly_do_ngay(nk, tnk, tu, den)],
         ("Khác mã kho đang chọn", khac_kho),
         ("Xuất Bán (không tính thuế)", _m(ct["PL KM"].isin(cfg.pl_km_khong_tinh).values)),
         ("Mã KH không có trong HSKH", _m((info["ploai"] == "").values)),
         ("KH không phải hộ kinh doanh", _m((ct["PL"] != 1).values)),
     ], toan_bo_ng, tu, den, tnk)
+    n_bs = int((chon & (ct["Ghi chú"] != "")).sum())
+    ds = getattr(canh_bao, "chan_doan", None)
+    if n_bs and ds is not None:      # ghi ngay dưới dòng "✔ Được tính thuế" của kho
+        i = max(j for j, d in enumerate(ds) if d["Nguồn"] == "Dữ liệu kho (Cường)" and d["Kết quả"].startswith("✔"))
+        ds.insert(i + 1, {"Nguồn": "Dữ liệu kho (Cường)", "Kết quả": f"  trong đó {GHI_CHU_BO_SUNG}", "Số dòng": n_bs})
     c = ct[chon]
     inf = info.reset_index(drop=True)[chon.values]
     tong = pd.DataFrame({
@@ -635,7 +665,8 @@ def xu_ly_kho(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, tu: date, 
         "Phân Loại": c["PL KM"],
         "Mã CTKM": "", "Tên CTKM": "",
         "Nguồn": cfg.nguon_kho,
-        "Ghi chú (Mã HH - Tên HH)": c["Mã HH"] + " - " + c["Tên HH"],
+        "Ghi chú (Mã HH - Tên HH)": (c["Ghi chú"].map(lambda g: g + " | " if g else "")
+                                     + c["Mã HH"] + " - " + c["Tên HH"]),
     }).reset_index(drop=True)
     return ct, tong
 

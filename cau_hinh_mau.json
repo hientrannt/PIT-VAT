@@ -112,17 +112,18 @@
       "Ngày ghi sổ"
     ],
     "XUAT_KM": [
-      "Ngay Hoa Don",
-      "Ngay CT",
-      "NgayGS"
+      "Ngay NH",
+      "NgayGS",
+      "Ngay Hoa Don"
     ],
     "VOUCHER": [
       "Ngày chứng từ",
       "Ngày ghi sổ"
     ],
     "KHO": [
-      "Ngày hóa đơn",
-      "Ngày giao hàng"
+      "Ngày nhận hàng",
+      "Ngày giao hàng",
+      "Ngày hóa đơn"
     ]
   },
   "cap_tk_khong_tinh": [

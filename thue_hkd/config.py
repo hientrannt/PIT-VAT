@@ -83,9 +83,9 @@ class Config:
     cot_ngay: dict = field(default_factory=lambda: {
         "CAN_TRU": ["Ngày chứng từ", "Ngày ghi sổ"],
         "CHI": ["Ngày chứng từ", "Ngày ghi sổ"],
-        "XUAT_KM": ["Ngay Hoa Don", "Ngay CT", "NgayGS"],
+        "XUAT_KM": ["Ngay NH", "NgayGS", "Ngay Hoa Don"],      # kho 03: ngày nhận hàng
         "VOUCHER": ["Ngày chứng từ", "Ngày ghi sổ"],
-        "KHO": ["Ngày hóa đơn", "Ngày giao hàng"],
+        "KHO": ["Ngày nhận hàng", "Ngày giao hàng", "Ngày hóa đơn"],  # kho 01: ngày nhận hàng
     })
 
     # --- Cặp [TK Nợ, TK Có] chắc chắn KHÔNG tính thuế (không báo ở LƯU Ý) ---

@@ -216,7 +216,7 @@ def _tinh_ke_khai(chi: pd.Series, cfg: Config) -> tuple[pd.Series, pd.Series, pd
 
 
 def ngay_ky(df: pd.DataFrame, cfg: Config, loai: str) -> tuple[pd.Series, str]:
-    """Ngày dùng để xác định tháng/năm (ngày chứng từ / ngày hóa đơn) và tên cột đã dùng."""
+    """Ngày dùng để xác định tháng/năm (ngày chứng từ / ngày nhận hàng) và tên cột đã dùng."""
     ds = (cfg.cot_ngay or {}).get(loai) or []
     for ten in ds:
         k = L.chuan_hoa(ten)
@@ -661,7 +661,7 @@ def theo_khach_hang(tat_ca: pd.DataFrame) -> pd.DataFrame:
 
 
 def ky_tu_du_lieu(du_lieu: dict[str, pd.DataFrame], cfg: Config | None = None) -> tuple[int, int] | None:
-    """Tháng/năm xuất hiện nhiều nhất trong các nguồn phát sinh (theo ngày chứng từ / ngày hóa đơn)."""
+    """Tháng/năm xuất hiện nhiều nhất trong các nguồn phát sinh (theo ngày chứng từ / ngày nhận hàng)."""
     cfg = cfg or Config()
     # Ưu tiên nguồn phát sinh của tổ (Xuất KM, Voucher, sổ quỹ); dữ liệu kho thường kéo dài nhiều tháng.
     for nhom in ((L.XUAT_KM, L.VOUCHER, L.CAN_TRU, L.CHI), (L.KHO,)):

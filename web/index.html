@@ -199,8 +199,8 @@ const CFG_MAC_DINH = {
   loc_ngay_can_tru: true, loc_ngay_to_cp: true,
   cot_ngay: {
     CAN_TRU: ["Ngày chứng từ", "Ngày ghi sổ"], CHI: ["Ngày chứng từ", "Ngày ghi sổ"],
-    XUAT_KM: ["Ngay Hoa Don", "Ngay CT", "NgayGS"], VOUCHER: ["Ngày chứng từ", "Ngày ghi sổ"],
-    KHO: ["Ngày hóa đơn", "Ngày giao hàng"]
+    XUAT_KM: ["Ngay NH", "NgayGS", "Ngay Hoa Don"], VOUCHER: ["Ngày chứng từ", "Ngày ghi sổ"],
+    KHO: ["Ngày nhận hàng", "Ngày giao hàng", "Ngày hóa đơn"]
   },
   cap_tk_khong_tinh: [["6418", "1121"], ["33882", "*"]]
 };
@@ -923,7 +923,7 @@ function tuChonKy() {
   if (!ky) return;
   $("tuyChon").checked = false; document.querySelectorAll(".kn").forEach(e => e.hidden = true);
   $("thang").value = ky[0]; $("nam").value = ky[1];
-  $("kyTu").hidden = false; $("kyTu").textContent = `Kỳ tự chọn theo ngày chứng từ / ngày hóa đơn trong dữ liệu: tháng ${ky[0]}/${ky[1]}. Có thể đổi nếu cần.`;
+  $("kyTu").hidden = false; $("kyTu").textContent = `Kỳ tự chọn theo ngày chứng từ / ngày nhận hàng trong dữ liệu: tháng ${ky[0]}/${ky[1]}. Có thể đổi nếu cần.`;
 }
 
 function veBangFile() {

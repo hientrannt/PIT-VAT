@@ -48,6 +48,10 @@ def main(argv=None) -> int:
         t = kq.tong(df)
         print(f"{nhan:<16} {len(df):>7} dòng | Kê khai {t['Số tiền Kê khai']:>18,.0f} | "
               f"GTGT {t['Tiền thuế GTGT']:>14,.0f} | TNCN {t['Tiền thuế TNCN']:>14,.0f}")
+    print("\nKIỂM TRA DỮ LIỆU:")
+    for r in kq.chan_doan.itertuples(index=False):
+        so_dong = "" if r[2] is None or r[2] != r[2] else f"{int(r[2]):>8,}"
+        print(f"  {r[0]:<28} {r[1]:<70} {so_dong}")
     if kq.canh_bao:
         print("\nLƯU Ý:")
         for cb in kq.canh_bao:

@@ -134,6 +134,11 @@ summary { cursor: pointer; }
     <div class="tiles" id="tiles"></div>
     <div class="scroll"><table id="bangTong"></table></div>
     <div>
+      <h2 style="margin-bottom:8px">Kiểm tra dữ liệu</h2>
+      <p class="note" style="margin:0 0 8px">Mỗi nguồn: đọc được bao nhiêu dòng, bao nhiêu dòng được tính và các dòng còn lại bị loại vì sao.</p>
+      <div class="scroll"><table id="bangKiemTra"></table></div>
+    </div>
+    <div>
       <h2 style="margin-bottom:8px">Lưu ý</h2>
       <div class="warns" id="warns"></div>
     </div>
@@ -449,6 +454,25 @@ function thueSuat(mshh, bang, duPhong, ten, cb, canDung) {
   return ts;
 }
 
+const thangTxt = ng => { const m = new Map(); ng.forEach(d => { if (d == null) return; const x = new Date(EPOCH + d * 86400000);
+  const k = String(x.getUTCMonth() + 1).padStart(2, "0") + "/" + x.getUTCFullYear(); m.set(k, (m.get(k) || 0) + 1); });
+  const ks = [...m.keys()].sort((a, b) => a.slice(3) + a.slice(0, 2) < b.slice(3) + b.slice(0, 2) ? -1 : 1);
+  return ks.map(k => `${k} (${m.get(k).toLocaleString("vi-VN")} dòng)`).join(", ") || "không đọc được ngày"; };
+/* lyDo: [[nhãn, mảng true = bị loại], ...] theo thứ tự ưu tiên */
+function chanDoan(cb, nguon, lyDo, ng, tu, den) {
+  const n = lyDo.length ? lyDo[0][1].length : 0, con = new Array(n).fill(true), dong = [];
+  for (const [nhan, m] of lyDo) { let k = 0; for (let i = 0; i < n; i++) if (con[i] && m[i]) { k++; con[i] = false; } if (k) dong.push([nhan, k]); }
+  const ds = cb.chan_doan || (cb.chan_doan = []);
+  ds.push([nguon, "Đọc được", n], [nguon, "✔ Được tính thuế", con.filter(Boolean).length]);
+  dong.forEach(([nh, k]) => ds.push([nguon, "✘ " + nh, k]));
+  if (ng) {
+    ds.push([nguon, "Các tháng trong dữ liệu: " + thangTxt(ng), null]);
+    if (n && !ng.some(d => trongKy(d, tu, den)))
+      cb.push({ muc: "KỲ", noi_dung: `${nguon}: không có dòng nào trong kỳ ${serialStr(tu)}–${serialStr(den)}`, so_dong: n,
+        hau_qua: `Dữ liệu thuộc: ${thangTxt(ng)} → kiểm tra lại tháng/năm đang chọn` });
+  }
+}
+
 function xuLySoQuy(b, kh, cfg, cheDo, tu, den, cb) {
   if (!b || !b.n) return [];
   const phieu = S(cot(b, "Phiếu chi hạch toán")), ma = S(cot(b, "Mã số")), tkNo = S(cot(b, "mstk"));
@@ -467,6 +491,12 @@ function xuLySoQuy(b, kh, cfg, cheDo, tu, den, cb) {
   baoTKMoi(tkNo, tkCo, pl, hkd.map((h, i) => h && ghiChu[i] !== "" && !boQua(tkNo[i], tkCo[i])), tenNguon, cb);
   const nguoi = cheDo === L.CAN_TRU ? cfg.nguoi_phu_trach_dt : cfg.nguoi_phu_trach_cp;
   const locNgay = cheDo === L.CAN_TRU ? cfg.loc_ngay_can_tru : cfg.loc_ngay_to_cp;
+  const lyDo = [];
+  if (cheDo === L.CAN_TRU) lyDo.push(["Không phải phiếu cấn trừ (BTH…)", ghiChu.map((g, i) => !(g === "Cấn trừ" && tkCo[i] === "1311"))]);
+  lyDo.push(["TK Nợ/TK Có không thuộc bảng phân loại", pl.map(p => p === "")], ["Mã KH không có trong HSKH", info.map(x => x.ploai === "")],
+    ["KH không phải hộ kinh doanh", hkd.map(h => !h)]);
+  if (locNgay) lyDo.push(["Ngoài kỳ", ng.map(d => !trongKy(d, tu, den))]);
+  chanDoan(cb, tenNguon, lyDo, locNgay ? ng : null, tu, den);
   const out = [];
   for (let i = 0; i < b.n; i++) {
     let ok = pl[i] !== "" && hkd[i];
@@ -516,6 +546,9 @@ function xuLyXuatKM(b, sc, bangThue, kh, cfg, tu, den, cb) {
     hau_qua: "Bị loại khỏi XUẤT KM – kiểm tra/bổ sung file Sổ cái", chi_tiet: { cot: ["Số HĐ", "MSKH", "Mshh"], dong: ks } });
   baoTKMoi(tkNo, tkCo, pl, hkd, "Xuất KM", cb, cfg.tk_no_loc_xuat.map(String));
   const loc = cfg.tk_no_loc_xuat.map(String), out = [];
+  chanDoan(cb, "Xuất KM", [["Số HĐ không có trong Sổ cái (không tra được TK Nợ)", tkNo.map(t => t === "")],
+    ["TK Nợ không thuộc danh sách tính thuế", tkNo.map(t => !loc.includes(t))], ["Mã KH không có trong HSKH", info.map(x => x.ploai === "")],
+    ["KH không phải hộ kinh doanh", hkd.map(h => !h)], ["Ngoài kỳ (theo NgayGS)", ng.map(d => !trongKy(d, tu, den))]], ng, tu, den);
   for (let i = 0; i < b.n; i++) {
     if (!(loc.includes(tkNo[i]) && hkd[i] && trongKy(ng[i], tu, den))) continue;
     const vat = congVat[i] ? lamTron(goc[i] * ts[i]) : 0, chi = lamTron(goc[i] + vat);
@@ -543,6 +576,9 @@ function xuLyVoucher(b, bangThue, kh, cfg, tu, den, cb) {
   baoKHThieu(ma, info, b, "Voucher", cb, pl.map(p => p !== ""), ["Tên KH", "Người thanh toán"]);
   baoTKMoi(tkNo, tkCo, pl, hkd, "Voucher", cb, cfg.tk_no_loc_xuat.map(String));
   const loc = cfg.tk_no_loc_xuat.map(String), out = [];
+  chanDoan(cb, "Voucher", [["TK Nợ (mstk) không thuộc danh sách tính thuế", tkNo.map(t => !loc.includes(t))],
+    ["Mã KH không có trong HSKH", info.map(x => x.ploai === "")], ["KH không phải hộ kinh doanh", hkd.map(h => !h)],
+    ["Ngoài kỳ (theo Ngày ghi sổ)", ng.map(d => !trongKy(d, tu, den))]], ng, tu, den);
   for (let i = 0; i < b.n; i++) {
     if (!(loc.includes(tkNo[i]) && hkd[i] && trongKy(ng[i], tu, den))) continue;
     const vat = congVat[i] ? lamTron(tien[i] * ts[i]) : 0, chi = lamTron(tien[i] + vat);
@@ -561,8 +597,12 @@ function xuLyKho(b, kh, cfg, tu, den, cb) {
   const ngGiao = cot(b, "Ngày giao hàng").map(ngay);
   const dsKho = String(cfg.ma_kho || "").split(",").map(x => x.trim()).filter(Boolean);
   const maKho = S(cot(b, "Mã kho", false));
-  const idx = [];
-  for (let i = 0; i < b.n; i++) if (trongKy(ngGiao[i], tu, den) && (!dsKho.length || dsKho.includes(maKho[i]))) idx.push(i);
+  const idx = [], ngoaiKy = ngGiao.map(d => !trongKy(d, tu, den)), khacKho = maKho.map(k => dsKho.length > 0 && !dsKho.includes(k));
+  for (let i = 0; i < b.n; i++) if (!ngoaiKy[i] && !khacKho[i]) idx.push(i);
+  const khoKhac = new Map(); maKho.forEach((k, i) => { if (khacKho[i] && !ngoaiKy[i]) khoKhac.set(k, (khoKhac.get(k) || 0) + 1); });
+  if (khoKhac.size) cb.push({ muc: "KHO", noi_dung: "Dữ liệu kho: có dòng thuộc kho khác " + dsKho.join(", ") + ": " +
+    [...khoKhac].map(([k, v]) => `${k || "(trống)"} (${v.toLocaleString("vi-VN")} dòng)`).join(", "),
+    so_dong: [...khoKhac.values()].reduce((a, c) => a + c, 0), hau_qua: "Bị loại – nếu cần tính, thêm mã kho vào cấu hình (ma_kho)" });
   const g = (a) => idx.map(i => a[i]);
   const sub = { n: idx.length, cols: {}, order: b.order };
   for (const c of b.order) sub.cols[c] = g(b.cols[c]);
@@ -594,6 +634,10 @@ function xuLyKho(b, kh, cfg, tu, den, cb) {
       "Đơn vị": maCN[i], "Số chứng từ": soHD[i], "Ngày ghi sổ": ngG[i], "TK Nợ": "", "TK Có": "", "Phân Loại": plKm,
       "Mã CTKM": "", "Tên CTKM": "", "Nguồn": cfg.nguon_kho, "Ghi chú (Mã HH - Tên HH)": maHH[i] + " - " + tenHH[i] });
   }
+  const sub2 = (arr) => { const a = new Array(b.n).fill(false); idx.forEach((i, j) => a[i] = arr[j]); return a; };
+  chanDoan(cb, "Dữ liệu kho (Cường)", [["Ngoài kỳ (theo Ngày giao hàng)", ngoaiKy], ["Khác mã kho đang chọn", khacKho],
+    ["Xuất Bán (không tính thuế)", sub2(ct.map(r => cfg.pl_km_khong_tinh.includes(r["PL KM"])))],
+    ["Mã KH không có trong HSKH", sub2(info.map(x => x.ploai === ""))], ["KH không phải hộ kinh doanh", sub2(ct.map(r => r.PL !== 1))]], ngGiao, tu, den);
   return [ct, tong];
 }
 
@@ -634,7 +678,10 @@ function tinh(du, tu, den, cfg) {
     cb.push({ muc: "HSKH", noi_dung: "Dòng trong bảng kê thiếu cả MST và CMND/CCCD", so_dong: thieuId.length, hau_qua: "Cần bổ sung để kê khai",
       chi_tiet: { cot: ["Mã số KH", "Họ và tên KH", "Nguồn"], dong } });
   }
-  return { tu, den, can_tru: ct, xuat_km: km, xuat_vc: vc, to_cp: cp, kho_chi_tiet: khoCT, kho, tong_hop_dt: dt, tat_ca: tatCa, theo_kh: theoKH(tatCa), canh_bao: cb };
+  for (const [loai, ten] of [[L.CAN_TRU, "Sổ quỹ - Cấn trừ (Tổ DT)"], [L.XUAT_KM, "Xuất KM"], [L.VOUCHER, "Voucher"], [L.CHI, "Sổ quỹ - Chi (Tổ CP)"],
+    [L.KHO, "Dữ liệu kho (Cường)"], [L.SO_CAI, "Sổ cái"], [L.HSKH, "Hồ sơ KH"], [L.THUE, "Bảng thuế suất"]])
+    if (!du[loai] && !(loai === L.HSKH && du.HSKH_IMPORT)) (cb.chan_doan = cb.chan_doan || []).push([ten, "⚠ Chưa có file", 0]);
+  return { chan_doan: cb.chan_doan || [], tu, den, can_tru: ct, xuat_km: km, xuat_vc: vc, to_cp: cp, kho_chi_tiet: khoCT, kho, tong_hop_dt: dt, tat_ca: tatCa, theo_kh: theoKH(tatCa), canh_bao: cb };
 }
 
 /* =========================================================================
@@ -642,7 +689,7 @@ function tinh(du, tu, den, cfg) {
    ========================================================================= */
 const tenCotExcel = j => { let s = ""; j++; while (j) { const r = (j - 1) % 26; s = String.fromCharCode(65 + r) + s; j = Math.floor((j - 1) / 26); } return s; };
 const RONG = { "Họ và tên KH": 24, "Tên Quầy Thuốc/Nhà Thuốc/Tổ chức": 36, "Tên CTKM": 36, "Ghi chú (Mã HH - Tên HH)": 36,
-  "Số chứng từ": 20, "Mã CTKM": 20, "Tên KH": 22, "Tên đơn vị": 32, "Tên HH": 32, "File": 44, "Loại dữ liệu": 26 };
+  "Số chứng từ": 20, "Mã CTKM": 20, "Nguồn": 28, "Kết quả": 90, "Tên KH": 22, "Tên đơn vị": 32, "Tên HH": 32, "File": 44, "Loại dữ liệu": 26 };
 function sheetBang(rows, cols, soCols, opts = {}) {
   const truoc = opts.truoc || [];      // các dòng phía trên (mảng mảng)
   const ws = {}, coTong = opts.tong !== false;
@@ -684,6 +731,8 @@ function taoExcel(kq, cfg, nguon) {
     const t = tongCot(d); truoc.push([n, d.length, "", "", "", "", ...COT_TIEN.map(c => t[c])]); }
   truoc.push([]);
   XLSX.utils.book_append_sheet(wb, sheetBang(kq.tat_ca, COT_ALL, COT_TIEN, { truoc }), "TỔNG HỢP");
+  XLSX.utils.book_append_sheet(wb, sheetBang(kq.chan_doan.map(r => ({ "Nguồn": r[0], "Kết quả": r[1], "Số dòng": r[2] })),
+    ["Nguồn", "Kết quả", "Số dòng"], ["Số dòng"], { tong: false }), "KIỂM TRA DỮ LIỆU");
   XLSX.utils.book_append_sheet(wb, sheetBang(kq.theo_kh, COT_THEO_KH, [...COT_TIEN, "Số dòng"]), "THEO KHÁCH HÀNG");
   XLSX.utils.book_append_sheet(wb, sheetBang(kq.tong_hop_dt, COT_KQ, COT_TIEN), "TONGHOP (Tổ DT)");
   XLSX.utils.book_append_sheet(wb, sheetBang(kq.can_tru, COT_KQ, COT_TIEN), "CẤN TRỪ");
@@ -859,6 +908,17 @@ function veKetQua() {
     tb.append(tr);
   });
   bt.append(tb);
+  const kt = $("bangKiemTra");
+  kt.innerHTML = "<thead><tr><th>Nguồn</th><th>Kết quả</th><th class=n>Số dòng</th></tr></thead>";
+  const ktb = document.createElement("tbody");
+  kq.chan_doan.forEach(([n, k, v]) => { const tr = document.createElement("tr");
+    const t1 = document.createElement("td"); t1.textContent = n; const t2 = document.createElement("td"); t2.style.whiteSpace = "normal";
+    const t3 = document.createElement("td"); t3.className = "n"; t3.textContent = v == null ? "" : fmt(v);
+    if (k.startsWith("✔")) { t2.innerHTML = '<span class="pill"></span>'; t2.firstChild.textContent = k; }
+    else if (k.startsWith("✘") || k.startsWith("⚠")) { t2.innerHTML = '<span class="pill no"></span>'; t2.firstChild.textContent = k; }
+    else { t2.textContent = k; if (k.startsWith("Các tháng")) t2.className = "note"; }
+    tr.append(t1, t2, t3); ktb.append(tr); });
+  kt.append(ktb);
   const w = $("warns"); w.innerHTML = "";
   if (!kq.canh_bao.length) w.innerHTML = '<div class="ok">Không có bất thường.</div>';
   kq.canh_bao.forEach(c => {

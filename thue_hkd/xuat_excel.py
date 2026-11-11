@@ -109,6 +109,9 @@ def ghi_excel(kq: KetQua, dich: str | Path | io.BytesIO | None = None, cfg: Conf
             for j, c in enumerate(COT_TIEN):
                 ws.write_number(2 + i, 6 + j, float(df[c].sum()) if len(df) else 0, g.f_so)
 
+        if kq.chan_doan is not None:
+            g.bang("KIỂM TRA DỮ LIỆU", kq.chan_doan, ["Số dòng"], tong=False,
+                   do_rong={"Nguồn": 28, "Kết quả": 90})
         g.bang("THEO KHÁCH HÀNG", kq.theo_kh, COT_TIEN + ["Số dòng"], do_rong=RONG)
         g.bang("TONGHOP (Tổ DT)", kq.tong_hop_dt, COT_TIEN, ["Ngày ghi sổ"], do_rong=RONG)
         g.bang("CẤN TRỪ", kq.can_tru, COT_TIEN, ["Ngày ghi sổ"], do_rong=RONG)

@@ -69,6 +69,45 @@ class CanhBao:
     chi_tiet: pd.DataFrame | None = None
 
 
+class NhatKy(list):
+    """Danh sách cảnh báo + bảng kiểm tra (vì sao dòng bị loại) của từng nguồn."""
+    def __init__(self):
+        super().__init__()
+        self.chan_doan: list[dict] = []
+
+
+def _thang(ng: pd.Series) -> str:
+    dem = ng.dropna().map(lambda d: f"{d.month:02d}/{d.year}").value_counts().sort_index()
+    return ", ".join(f"{k} ({v:,} dòng)" for k, v in dem.items()) or "không đọc được ngày"
+
+
+def _chan_doan(cb, nguon: str, ly_do: list, ng: pd.Series | None = None,
+               tu: date | None = None, den: date | None = None):
+    """``ly_do``: [(nhãn, mask_bị_loại), ...] theo thứ tự ưu tiên; dòng không bị loại = Được tính."""
+    n = len(ly_do[0][1]) if ly_do else 0
+    con = pd.Series(True, index=ly_do[0][1].index) if ly_do else None
+    dong = []
+    for nhan, m in ly_do:
+        k = int((m & con).sum())
+        if k:
+            dong.append((nhan, k))
+        con &= ~m
+    tinh_duoc = int(con.sum()) if con is not None else 0
+    ds = getattr(cb, "chan_doan", None)
+    if ds is not None:
+        ds.append({"Nguồn": nguon, "Kết quả": "Đọc được", "Số dòng": n})
+        ds.append({"Nguồn": nguon, "Kết quả": "✔ Được tính thuế", "Số dòng": tinh_duoc})
+        for nhan, k in dong:
+            ds.append({"Nguồn": nguon, "Kết quả": "✘ " + nhan, "Số dòng": k})
+        if ng is not None:
+            ds.append({"Nguồn": nguon, "Kết quả": "Các tháng trong dữ liệu: " + _thang(ng), "Số dòng": None})
+    if ng is not None and n and tu is not None:
+        trong = ng.map(lambda d: d is not None and tu <= d <= den)
+        if not trong.any():
+            cb.append(CanhBao("KỲ", f"{nguon}: không có dòng nào trong kỳ {tu:%d/%m/%Y}–{den:%d/%m/%Y}",
+                              n, f"Dữ liệu thuộc: {_thang(ng)} → kiểm tra lại tháng/năm đang chọn"))
+
+
 @dataclass
 class KetQua:
     tu_ngay: date
@@ -84,6 +123,7 @@ class KetQua:
     theo_kh: pd.DataFrame
     canh_bao: list[CanhBao] = field(default_factory=list)
     nguon: pd.DataFrame | None = None
+    chan_doan: pd.DataFrame | None = None
 
     def tong(self, df: pd.DataFrame) -> dict:
         return {c: float(df[c].sum()) if len(df) else 0.0 for c in COT_TIEN}
@@ -234,8 +274,15 @@ def xu_ly_so_quy(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, che_do:
     hkd = la_hkd(info["ploai"], cfg)
 
     loc = (pl != "") & hkd
+    khong_hskh = info["ploai"] == ""
+    ly_do = []
     if che_do == L.CAN_TRU:
         loc &= (ghi_chu == "Cấn trừ") & (tk_co == "1311")
+        ly_do.append(("Không phải phiếu cấn trừ (BTH…)", ~((ghi_chu == "Cấn trừ") & (tk_co == "1311"))))
+    ly_do += [("TK Nợ/TK Có không thuộc bảng phân loại", pl == ""),
+              ("Mã KH không có trong HSKH", khong_hskh),
+              ("KH không phải hộ kinh doanh", ~hkd)]
+    if che_do == L.CAN_TRU:
         loc_ngay = cfg.loc_ngay_can_tru
         nguoi = cfg.nguoi_phu_trach_dt
     else:
@@ -243,6 +290,8 @@ def xu_ly_so_quy(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, che_do:
         nguoi = cfg.nguoi_phu_trach_cp
     if loc_ngay:
         loc &= _trong_ky(ng, tu, den)
+        ly_do.append(("Ngoài kỳ", ~_trong_ky(ng, tu, den)))
+    _chan_doan(canh_bao, L.TEN_LOAI[che_do], ly_do, ng if loc_ngay else None, tu, den)
 
     co_phieu = ghi_chu != ""
     _bao_kh_thieu(ma, info, df, L.TEN_LOAI[che_do], canh_bao, (pl != "") & (ma != tk_no), cot_ten=("Tên KH", "Người thanh toán"))
@@ -379,6 +428,13 @@ def xu_ly_xuat_km(df: pd.DataFrame | None, so_cai: pd.DataFrame | None, bang_thu
         "Tên CTKM": ghep("Ten Ctkm", "Ten Hm"),
     }, index=df.index)
     loc = tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat]) & hkd & _trong_ky(ng, tu, den)
+    _chan_doan(canh_bao, "Xuất KM", [
+        ("Số HĐ không có trong Sổ cái (không tra được TK Nợ)", tk_no == ""),
+        ("TK Nợ không thuộc danh sách tính thuế", ~tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat])),
+        ("Mã KH không có trong HSKH", info["ploai"] == ""),
+        ("KH không phải hộ kinh doanh", ~hkd),
+        ("Ngoài kỳ (theo NgayGS)", ~_trong_ky(ng, tu, den)),
+    ], ng, tu, den)
     return out[loc].reset_index(drop=True)
 
 
@@ -430,6 +486,12 @@ def xu_ly_voucher(df: pd.DataFrame | None, bang_thue: dict, kh: pd.DataFrame, cf
         "Tên CTKM": _s(_cot(df, "Tên CTKM", bat_buoc=False)),
     }, index=df.index)
     loc = tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat]) & hkd & _trong_ky(ng, tu, den)
+    _chan_doan(canh_bao, "Voucher", [
+        ("TK Nợ (mstk) không thuộc danh sách tính thuế", ~tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat])),
+        ("Mã KH không có trong HSKH", info["ploai"] == ""),
+        ("KH không phải hộ kinh doanh", ~hkd),
+        ("Ngoài kỳ (theo Ngày ghi sổ)", ~_trong_ky(ng, tu, den)),
+    ], ng, tu, den)
     return out[loc].reset_index(drop=True)
 
 
@@ -441,10 +503,18 @@ def xu_ly_kho(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, tu: date, 
     if df is None or not len(df):
         return pd.DataFrame(columns=COT_KHO), pd.DataFrame(columns=COT_ALL)
     ng_giao = _cot(df, "Ngày giao hàng").map(ngay)
-    loc = _trong_ky(ng_giao, tu, den)
-    if cfg.ma_kho:
-        ds_kho = [x.strip() for x in str(cfg.ma_kho).split(",") if x.strip()]
-        loc &= _s(_cot(df, "Mã kho", bat_buoc=False)).isin(ds_kho)
+    ngoai_ky = ~_trong_ky(ng_giao, tu, den)
+    ma_kho_all = _s(_cot(df, "Mã kho", bat_buoc=False))
+    ds_kho = [x.strip() for x in str(cfg.ma_kho or "").split(",") if x.strip()]
+    khac_kho = ~ma_kho_all.isin(ds_kho) if ds_kho else pd.Series(False, index=df.index)
+    if (khac_kho & ~ngoai_ky).any():
+        cac_kho = ma_kho_all[khac_kho & ~ngoai_ky].value_counts()
+        canh_bao.append(CanhBao("KHO", "Dữ liệu kho: có dòng thuộc kho khác " + ", ".join(ds_kho) + ": "
+                                + ", ".join(f"{k or '(trống)'} ({v:,} dòng)" for k, v in cac_kho.items()),
+                                int(cac_kho.sum()), "Bị loại – nếu cần tính, thêm mã kho vào cấu hình (ma_kho)"))
+    toan_bo_ng = ng_giao
+    loc = ~ngoai_ky & ~khac_kho
+    df_goc = df
     df = df[loc]
     ng_giao = ng_giao[loc]
     ma = _s(_cot(df, "Mã khách hàng"))
@@ -482,6 +552,18 @@ def xu_ly_kho(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, tu: date, 
     }).reset_index(drop=True)
 
     chon = (ct["PL"] == 1) & ~ct["PL KM"].isin(cfg.pl_km_khong_tinh)
+    idx = df.index
+    def _m(v):
+        s = pd.Series(False, index=df_goc.index)
+        s.loc[idx] = v
+        return s
+    _chan_doan(canh_bao, "Dữ liệu kho (Cường)", [
+        ("Ngoài kỳ (theo Ngày giao hàng)", ngoai_ky),
+        ("Khác mã kho đang chọn", khac_kho),
+        ("Xuất Bán (không tính thuế)", _m(ct["PL KM"].isin(cfg.pl_km_khong_tinh).values)),
+        ("Mã KH không có trong HSKH", _m((info["ploai"] == "").values)),
+        ("KH không phải hộ kinh doanh", _m((ct["PL"] != 1).values)),
+    ], toan_bo_ng, tu, den)
     c = ct[chon]
     inf = info.reset_index(drop=True)[chon.values]
     tong = pd.DataFrame({
@@ -563,7 +645,7 @@ def theo_khach_hang(tat_ca: pd.DataFrame) -> pd.DataFrame:
 def tinh(du_lieu: dict[str, pd.DataFrame], tu: date, den: date, cfg: Config | None = None) -> KetQua:
     """Chạy toàn bộ quy trình. ``du_lieu`` = kết quả ``doc_file.gop_theo_loai``."""
     cfg = cfg or Config()
-    cb: list[CanhBao] = []
+    cb = NhatKy()
     kh = lap_ho_so_kh(du_lieu.get(L.HSKH), du_lieu.get(L.HSKH_IMPORT), cfg, cb)
     if not len(kh):
         cb.append(CanhBao("HSKH", "Chưa có file hồ sơ khách hàng (HSKH)", 0,
@@ -598,4 +680,11 @@ def tinh(du_lieu: dict[str, pd.DataFrame], tu: date, den: date, cfg: Config | No
                           "Cần bổ sung để kê khai",
                           tat_ca.loc[thieu_id, ["Mã số KH", "Họ và tên KH", "Nguồn"]].drop_duplicates()))
 
-    return KetQua(tu, den, ct, km, vc, cp, kho_ct, kho, dt, tat_ca, theo_khach_hang(tat_ca), cb)
+    for loai, ten in ((L.CAN_TRU, "Sổ quỹ - Cấn trừ (Tổ DT)"), (L.XUAT_KM, "Xuất KM"), (L.VOUCHER, "Voucher"),
+                      (L.CHI, "Sổ quỹ - Chi (Tổ CP)"), (L.KHO, "Dữ liệu kho (Cường)"), (L.SO_CAI, "Sổ cái"),
+                      (L.HSKH, "Hồ sơ KH"), (L.THUE, "Bảng thuế suất")):
+        if loai not in du_lieu and not (loai == L.HSKH and L.HSKH_IMPORT in du_lieu):
+            cb.chan_doan.append({"Nguồn": ten, "Kết quả": "⚠ Chưa có file", "Số dòng": 0})
+    kq = KetQua(tu, den, ct, km, vc, cp, kho_ct, kho, dt, tat_ca, theo_khach_hang(tat_ca), list(cb))
+    kq.chan_doan = pd.DataFrame(cb.chan_doan, columns=["Nguồn", "Kết quả", "Số dòng"])
+    return kq

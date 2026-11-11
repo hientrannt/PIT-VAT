@@ -70,8 +70,28 @@ def lam_tron(x: float, chu_so: int = 0) -> float:
     return float(d.quantize(q, rounding=ROUND_HALF_UP))
 
 
+_THANG_CHU = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8,
+              "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+
+
+def _tao_ngay(y: int, mo: int, d: int) -> date | None:
+    if y < 100:
+        y += 2000
+    if mo > 12 and d <= 12:          # mm/dd kiểu Mỹ (vd 09/13/2026)
+        mo, d = d, mo
+    try:
+        return date(y, mo, d)
+    except ValueError:
+        return None
+
+
 def ngay(x) -> date | None:
-    """Đọc ngày từ datetime / số serial Excel / chuỗi dd/mm/yyyy, yyyy/mm/dd, yyyy-mm-dd."""
+    """Đọc ngày từ: datetime / số serial Excel / số yyyymmdd / chuỗi.
+
+    Chuỗi chấp nhận: dd/mm/yyyy, d/m/yy, dd-mm-yyyy, dd.mm.yyyy, yyyy/mm/dd, yyyy-mm-ddThh:mm,
+    có giờ phía sau (kể cả SA/CH), dấu ' ở đầu, khoảng trắng ẩn, 9-Sep-2026, Sep 9 2026,
+    20260909, "ngày 09 tháng 09 năm 2026", số serial dạng chữ (46274). Mặc định ngày trước tháng.
+    """
     if la_rong(x):
         return None
     if isinstance(x, datetime):
@@ -81,24 +101,35 @@ def ngay(x) -> date | None:
     if isinstance(x, pd.Timestamp):
         return x.date()
     if isinstance(x, (int, float)) and not isinstance(x, bool):
+        if float(x).is_integer() and 19000101 <= x <= 21001231:
+            v = int(x)
+            return _tao_ngay(v // 10000, v // 100 % 100, v % 100)
         if 1 < x < 2958466:
             return _EXCEL_EPOCH + timedelta(days=int(x))
         return None
-    s = str(x).strip().split(" ")[0].split("T")[0]
-    m = re.fullmatch(r"(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})", s)
-    if m:
-        y, mo, d = map(int, m.groups())
-    else:
-        m = re.fullmatch(r"(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})", s)
-        if not m:
-            if re.fullmatch(r"\d+(\.\d+)?", s):
-                return ngay(float(s))
-            return None
-        d, mo, y = map(int, m.groups())
-    try:
-        return date(y, mo, d)
-    except ValueError:
+    s = str(x).replace("\u00a0", " ").replace("\u200b", "").strip().lstrip("'`").strip().lower()
+    if not s:
         return None
+    m = re.search(r"ngày\s*(\d{1,2})\s*tháng\s*(\d{1,2})\s*năm\s*(\d{4})", s)
+    if m:
+        return _tao_ngay(int(m[3]), int(m[2]), int(m[1]))
+    m = re.search(r"(?<!\d)(\d{4})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{1,2})(?!\d)", s)
+    if m:
+        return _tao_ngay(int(m[1]), int(m[2]), int(m[3]))
+    m = re.search(r"(?<!\d)(\d{1,2})\s*[/\-.]\s*(\d{1,2})\s*[/\-.]\s*(\d{4}|\d{2})(?!\d)", s)
+    if m:
+        return _tao_ngay(int(m[3]), int(m[2]), int(m[1]))
+    m = re.search(r"(?<!\d)(\d{1,2})[\s\-/.]*([a-z]{3})[a-z]*[\s\-/.,]*(\d{4}|\d{2})(?!\d)", s)
+    if m and m[2] in _THANG_CHU:
+        return _tao_ngay(int(m[3]), _THANG_CHU[m[2]], int(m[1]))
+    m = re.search(r"([a-z]{3})[a-z]*\.?\s*(\d{1,2}),?\s*(\d{4})", s)
+    if m and m[1] in _THANG_CHU:
+        return _tao_ngay(int(m[3]), _THANG_CHU[m[1]], int(m[2]))
+    if re.fullmatch(r"\d{8}", s):
+        return ngay(int(s))
+    if re.fullmatch(r"\d+(\.\d+)?", s):
+        return ngay(float(s))
+    return None
 
 
 def bo_lap_doi(s: str) -> str:

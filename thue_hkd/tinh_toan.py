@@ -216,17 +216,46 @@ def _tinh_ke_khai(chi: pd.Series, cfg: Config) -> tuple[pd.Series, pd.Series, pd
 
 
 def ngay_ky(df: pd.DataFrame, cfg: Config, loai: str) -> tuple[pd.Series, str]:
-    """Ngày dùng để xác định tháng/năm (ngày chứng từ / ngày nhận hàng) và tên cột đã dùng."""
+    """Ngày dùng để xác định tháng/năm và tên cột đã dùng.
+
+    Lấy cột ĐẦU TIÊN trong ``cfg.cot_ngay[loai]`` có giá trị (kể cả khi giá trị không đọc được,
+    để báo lỗi thay vì âm thầm chuyển sang cột khác).
+    """
     ds = (cfg.cot_ngay or {}).get(loai) or []
     for ten in ds:
         k = L.chuan_hoa(ten)
-        if k in df.columns:
-            v = df[k].map(ngay)
-            if v.notna().any():
-                return v, ten
-    if ds:
-        return pd.Series([None] * len(df), index=df.index, dtype=object), ds[0]
-    return pd.Series([None] * len(df), index=df.index, dtype=object), "?"
+        if k in df.columns and df[k].map(lambda v: chuoi(v) != "").any():
+            return df[k].map(ngay), ten
+    return pd.Series([None] * len(df), index=df.index, dtype=object), (ds[0] if ds else "?")
+
+
+def _cot_ngay_tho(df: pd.DataFrame, ten: str) -> pd.Series:
+    k = L.chuan_hoa(ten)
+    return df[k] if k in df.columns else pd.Series([None] * len(df), index=df.index)
+
+
+def _ly_do_ngay(nk: pd.Series, tnk: str, tu: date, den: date) -> list:
+    return [(f"Ngày không đọc được (cột {tnk})", nk.isna()),
+            (f"Ngoài kỳ (theo {tnk})", ~_trong_ky(nk, tu, den))]
+
+
+def _bao_ngay_loi(du_lieu: dict, cfg: Config, cb) -> None:
+    for loai in (L.CAN_TRU, L.CHI, L.XUAT_KM, L.VOUCHER, L.KHO):
+        df = du_lieu.get(loai)
+        if df is None or not len(df):
+            continue
+        nk, tnk = ngay_ky(df, cfg, loai)
+        tho = _cot_ngay_tho(df, tnk)
+        loi = nk.isna() & tho.map(lambda v: chuoi(v) != "")
+        trong = nk.isna() & ~loi
+        if loi.any():
+            vd = list(dict.fromkeys(tho[loi].map(chuoi)))[:8]
+            cb.append(CanhBao("NGÀY", f"{L.TEN_LOAI[loai]}: {int(loi.sum()):,} dòng có cột “{tnk}” không đọc được "
+                              f"thành ngày, ví dụ: {' | '.join(vd)}", int(loi.sum()),
+                              "Các dòng này không xác định được tháng → bị loại. Gửi mẫu này để bổ sung cách đọc."))
+        if trong.any():
+            cb.append(CanhBao("NGÀY", f"{L.TEN_LOAI[loai]}: {int(trong.sum()):,} dòng để trống cột “{tnk}”",
+                              int(trong.sum()), "Không xác định được tháng → bị loại"))
 
 
 def _trong_ky(ng: pd.Series, tu: date, den: date) -> pd.Series:
@@ -305,7 +334,7 @@ def xu_ly_so_quy(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, che_do:
     nk, tnk = ngay_ky(df, cfg, che_do)
     if loc_ngay:
         loc &= _trong_ky(nk, tu, den)
-        ly_do.append((f"Ngoài kỳ (theo {tnk})", ~_trong_ky(nk, tu, den)))
+        ly_do += _ly_do_ngay(nk, tnk, tu, den)
     _chan_doan(canh_bao, L.TEN_LOAI[che_do], ly_do, nk if loc_ngay else None, tu, den, tnk)
 
     co_phieu = ghi_chu != ""
@@ -449,7 +478,7 @@ def xu_ly_xuat_km(df: pd.DataFrame | None, so_cai: pd.DataFrame | None, bang_thu
         ("TK Nợ không thuộc danh sách tính thuế", ~tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat])),
         ("Mã KH không có trong HSKH", info["ploai"] == ""),
         ("KH không phải hộ kinh doanh", ~hkd),
-        (f"Ngoài kỳ (theo {tnk})", ~_trong_ky(nk, tu, den)),
+        *_ly_do_ngay(nk, tnk, tu, den),
     ], nk, tu, den, tnk)
     return out[loc].reset_index(drop=True)
 
@@ -509,7 +538,7 @@ def xu_ly_voucher(df: pd.DataFrame | None, bang_thue: dict, kh: pd.DataFrame, cf
         ("TK Nợ (mstk) không thuộc danh sách tính thuế", ~tk_no.isin([str(x) for x in cfg.tk_no_loc_xuat])),
         ("Mã KH không có trong HSKH", info["ploai"] == ""),
         ("KH không phải hộ kinh doanh", ~hkd),
-        (f"Ngoài kỳ (theo {tnk})", ~_trong_ky(nk, tu, den)),
+        *_ly_do_ngay(nk, tnk, tu, den),
     ], nk, tu, den, tnk)
     return out[loc].reset_index(drop=True)
 
@@ -578,7 +607,7 @@ def xu_ly_kho(df: pd.DataFrame | None, kh: pd.DataFrame, cfg: Config, tu: date, 
         s.loc[idx] = v
         return s
     _chan_doan(canh_bao, "Dữ liệu kho (Cường)", [
-        (f"Ngoài kỳ (theo {tnk})", ngoai_ky),
+        *_ly_do_ngay(nk, tnk, tu, den),
         ("Khác mã kho đang chọn", khac_kho),
         ("Xuất Bán (không tính thuế)", _m(ct["PL KM"].isin(cfg.pl_km_khong_tinh).values)),
         ("Mã KH không có trong HSKH", _m((info["ploai"] == "").values)),
@@ -689,6 +718,7 @@ def tinh(du_lieu: dict[str, pd.DataFrame], tu: date, den: date, cfg: Config | No
         cb.append(CanhBao("HSKH", "Chưa có file hồ sơ khách hàng (HSKH)", 0,
                           "Không xác định được KH nào là HKD → bảng kê sẽ rỗng"))
     bang_thue = lap_bang_thue(du_lieu.get(L.THUE))
+    _bao_ngay_loi(du_lieu, cfg, cb)
     if L.XUAT_KM in du_lieu and L.SO_CAI not in du_lieu:
         cb.append(CanhBao("SỔ CÁI", "Có dữ liệu Xuất KM nhưng chưa có file Sổ cái", 0,
                           "Không tra được TK Nợ → toàn bộ Xuất KM bị loại"))

@@ -238,15 +238,29 @@ function serial(y, m, d) {
   if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
   return Math.round((t - EPOCH) / 86400000);
 }
-function ngay(x) {          // -> số serial Excel (nguyên) hoặc null
+const THANG_CHU = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+function taoNgay(y, mo, d) { if (y < 100) y += 2000; if (mo > 12 && d <= 12) [mo, d] = [d, mo]; return serial(y, mo, d); }
+/* -> số serial Excel (nguyên) hoặc null. Mặc định NGÀY trước THÁNG (dd/mm/yyyy). Xem tien_ich.ngay của bản Python. */
+function ngay(x) {
   if (rong(x)) return null;
   if (x instanceof Date) return serial(x.getFullYear(), x.getMonth() + 1, x.getDate());
-  if (typeof x === "number") return (x > 1 && x < 2958466) ? Math.floor(x) : null;
-  const s = String(x).trim().split(" ")[0].split("T")[0];
-  let m = s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
-  if (m) return serial(+m[1], +m[2], +m[3]);
-  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-  if (m) return serial(+m[3], +m[2], +m[1]);
+  if (typeof x === "number") {
+    if (Number.isInteger(x) && x >= 19000101 && x <= 21001231) return taoNgay(Math.floor(x / 10000), Math.floor(x / 100) % 100, x % 100);
+    return (x > 1 && x < 2958466) ? Math.floor(x) : null;
+  }
+  const s = String(x).replace(/ /g, " ").replace(/​/g, "").trim().replace(/^['`]+/, "").trim().toLowerCase();
+  if (!s) return null;
+  let m = s.match(/ngày\s*(\d{1,2})\s*tháng\s*(\d{1,2})\s*năm\s*(\d{4})/);
+  if (m) return taoNgay(+m[3], +m[2], +m[1]);
+  m = s.match(/(?<!\d)(\d{4})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})(?!\d)/);
+  if (m) return taoNgay(+m[1], +m[2], +m[3]);
+  m = s.match(/(?<!\d)(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{4}|\d{2})(?!\d)/);
+  if (m) return taoNgay(+m[3], +m[2], +m[1]);
+  m = s.match(/(?<!\d)(\d{1,2})[\s\-\/.]*([a-z]{3})[a-z]*[\s\-\/.,]*(\d{4}|\d{2})(?!\d)/);
+  if (m && THANG_CHU[m[2]]) return taoNgay(+m[3], THANG_CHU[m[2]], +m[1]);
+  m = s.match(/([a-z]{3})[a-z]*\.?\s*(\d{1,2}),?\s*(\d{4})/);
+  if (m && THANG_CHU[m[1]]) return taoNgay(+m[3], THANG_CHU[m[1]], +m[2]);
+  if (/^\d{8}$/.test(s)) return ngay(Number(s));
   if (/^\d+(\.\d+)?$/.test(s)) return ngay(Number(s));
   return null;
 }
@@ -311,7 +325,8 @@ function laFileChi(ten, sheet, bang) {
   return false;
 }
 function docWorkbook(buf, ten) {
-  const wb = XLSX.read(buf, { type: "array", cellDates: false, cellText: false, cellNF: false, dense: true });
+  const laCsv = /\.(csv|txt)$/i.test(ten);
+  const wb = XLSX.read(buf, { type: "array", cellDates: false, cellText: false, cellNF: false, dense: true, raw: laCsv, codepage: 65001 });
   const kq = [];
   for (const sheet of wb.SheetNames) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { header: 1, raw: true, defval: null, blankrows: false });
@@ -493,8 +508,20 @@ const thangTxt = ng => { const m = new Map(); ng.forEach(d => { if (d == null) r
 /* Ngày xác định kỳ: cột đầu tiên trong cfg.cot_ngay[loai] có dữ liệu ngày */
 function ngayKy(b, cfg, loai) {
   const ds = (cfg.cot_ngay && cfg.cot_ngay[loai]) || [];
-  for (const t of ds) { const k = norm(t); if (k in b.cols) { const v = b.cols[k].map(ngay); if (v.some(x => x != null)) return [v, t]; } }
+  for (const t of ds) { const k = norm(t); if (k in b.cols && b.cols[k].some(v => chuoi(v) !== "")) return [b.cols[k].map(ngay), t]; }
   return [new Array(b.n).fill(null), ds[0] || "?"];
+}
+const lyDoNgay = (nk, tnk, tu, den) => [[`Ngày không đọc được (cột ${tnk})`, nk.map(d => d == null)], [`Ngoài kỳ (theo ${tnk})`, nk.map(d => !trongKy(d, tu, den))]];
+function baoNgayLoi(du, cfg, cb) {
+  for (const loai of [L.CAN_TRU, L.CHI, L.XUAT_KM, L.VOUCHER, L.KHO]) {
+    const b = du[loai]; if (!b || !b.n) continue;
+    const [nk, tnk] = ngayKy(b, cfg, loai), tho = b.cols[norm(tnk)] || new Array(b.n).fill(null);
+    const vd = new Set(); let loi = 0, trong = 0;
+    nk.forEach((d, i) => { if (d != null) return; if (chuoi(tho[i]) !== "") { loi++; if (vd.size < 8) vd.add(chuoi(tho[i])); } else trong++; });
+    if (loi) cb.push({ muc: "NGÀY", noi_dung: `${TEN_LOAI[loai]}: ${loi.toLocaleString("vi-VN")} dòng có cột “${tnk}” không đọc được thành ngày, ví dụ: ${[...vd].join(" | ")}`,
+      so_dong: loi, hau_qua: "Các dòng này không xác định được tháng → bị loại. Gửi mẫu này để bổ sung cách đọc." });
+    if (trong) cb.push({ muc: "NGÀY", noi_dung: `${TEN_LOAI[loai]}: ${trong.toLocaleString("vi-VN")} dòng để trống cột “${tnk}”`, so_dong: trong, hau_qua: "Không xác định được tháng → bị loại" });
+  }
 }
 /* lyDo: [[nhãn, mảng true = bị loại], ...] theo thứ tự ưu tiên */
 function chanDoan(cb, nguon, lyDo, ng, tu, den, tenCot = "ngày") {
@@ -534,7 +561,7 @@ function xuLySoQuy(b, kh, cfg, cheDo, tu, den, cb) {
   lyDo.push(["TK Nợ/TK Có không thuộc bảng phân loại", pl.map(p => p === "")], ["Mã KH không có trong HSKH", info.map(x => x.ploai === "")],
     ["KH không phải hộ kinh doanh", hkd.map(h => !h)]);
   const [nk, tnk] = ngayKy(b, cfg, cheDo);
-  if (locNgay) lyDo.push([`Ngoài kỳ (theo ${tnk})`, nk.map(d => !trongKy(d, tu, den))]);
+  if (locNgay) lyDo.push(...lyDoNgay(nk, tnk, tu, den));
   chanDoan(cb, tenNguon, lyDo, locNgay ? nk : null, tu, den, tnk);
   const out = [];
   for (let i = 0; i < b.n; i++) {
@@ -588,7 +615,7 @@ function xuLyXuatKM(b, sc, bangThue, kh, cfg, tu, den, cb) {
   const [nk, tnk] = ngayKy(b, cfg, L.XUAT_KM);
   chanDoan(cb, "Xuất KM", [["Số HĐ không có trong Sổ cái (không tra được TK Nợ)", tkNo.map(t => t === "")],
     ["TK Nợ không thuộc danh sách tính thuế", tkNo.map(t => !loc.includes(t))], ["Mã KH không có trong HSKH", info.map(x => x.ploai === "")],
-    ["KH không phải hộ kinh doanh", hkd.map(h => !h)], [`Ngoài kỳ (theo ${tnk})`, nk.map(d => !trongKy(d, tu, den))]], nk, tu, den, tnk);
+    ["KH không phải hộ kinh doanh", hkd.map(h => !h)], ...lyDoNgay(nk, tnk, tu, den)], nk, tu, den, tnk);
   for (let i = 0; i < b.n; i++) {
     if (!(loc.includes(tkNo[i]) && hkd[i] && trongKy(nk[i], tu, den))) continue;
     const vat = congVat[i] ? lamTron(goc[i] * ts[i]) : 0, chi = lamTron(goc[i] + vat);
@@ -620,7 +647,7 @@ function xuLyVoucher(b, bangThue, kh, cfg, tu, den, cb) {
   const [nk, tnk] = ngayKy(b, cfg, L.VOUCHER);
   chanDoan(cb, "Voucher", [["TK Nợ (mstk) không thuộc danh sách tính thuế", tkNo.map(t => !loc.includes(t))],
     ["Mã KH không có trong HSKH", info.map(x => x.ploai === "")], ["KH không phải hộ kinh doanh", hkd.map(h => !h)],
-    [`Ngoài kỳ (theo ${tnk})`, nk.map(d => !trongKy(d, tu, den))]], nk, tu, den, tnk);
+    ...lyDoNgay(nk, tnk, tu, den)], nk, tu, den, tnk);
   for (let i = 0; i < b.n; i++) {
     if (!(loc.includes(tkNo[i]) && hkd[i] && trongKy(nk[i], tu, den))) continue;
     const vat = congVat[i] ? lamTron(tien[i] * ts[i]) : 0, chi = lamTron(tien[i] + vat);
@@ -678,7 +705,7 @@ function xuLyKho(b, kh, cfg, tu, den, cb) {
       "Mã CTKM": "", "Tên CTKM": "", "Nguồn": cfg.nguon_kho, "Ghi chú (Mã HH - Tên HH)": maHH[i] + " - " + tenHH[i] });
   }
   const sub2 = (arr) => { const a = new Array(b.n).fill(false); idx.forEach((i, j) => a[i] = arr[j]); return a; };
-  chanDoan(cb, "Dữ liệu kho (Cường)", [[`Ngoài kỳ (theo ${tnk})`, ngoaiKy], ["Khác mã kho đang chọn", khacKho],
+  chanDoan(cb, "Dữ liệu kho (Cường)", [...lyDoNgay(nk, tnk, tu, den), ["Khác mã kho đang chọn", khacKho],
     ["Xuất Bán (không tính thuế)", sub2(ct.map(r => cfg.pl_km_khong_tinh.includes(r["PL KM"])))],
     ["Mã KH không có trong HSKH", sub2(info.map(x => x.ploai === ""))], ["KH không phải hộ kinh doanh", sub2(ct.map(r => r.PL !== 1))]], nk, tu, den, tnk);
   return [ct, tong];
@@ -715,6 +742,7 @@ function tinh(du, tu, den, cfg) {
   const kh = lapHoSoKH(du.HSKH, du.HSKH_IMPORT, cfg, cb);
   if (!kh.size) cb.push({ muc: "HSKH", noi_dung: "Chưa có file hồ sơ khách hàng (HSKH)", so_dong: 0, hau_qua: "Không xác định được KH nào là HKD → bảng kê sẽ rỗng" });
   const bangThue = lapBangThue(du.THUE);
+  baoNgayLoi(du, cfg, cb);
   if (du.XUAT_KM && !du.SO_CAI) cb.push({ muc: "SỔ CÁI", noi_dung: "Có dữ liệu Xuất KM nhưng chưa có file Sổ cái", so_dong: 0, hau_qua: "Không tra được TK Nợ → toàn bộ Xuất KM bị loại" });
   const ct = xuLySoQuy(du.CAN_TRU, kh, cfg, L.CAN_TRU, tu, den, cb);
   const km = xuLyXuatKM(du.XUAT_KM, du.SO_CAI, bangThue, kh, cfg, tu, den, cb);

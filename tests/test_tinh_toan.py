@@ -170,3 +170,16 @@ def test_tu_chon_ky_va_bo_trung(bo_file, tmp_path):
     assert kq.xuat_km["Mã số KH"].tolist() == ["KH1", "KH2"]   # dòng trùng không bị cộng 2 lần
     assert any(c.muc == "TRÙNG" for c in kq.canh_bao)
     assert kq.chan_doan is not None and len(kq.chan_doan)
+
+
+@pytest.mark.parametrize("v,kq", [
+    ("09/09/2026", date(2026, 9, 9)), ("9/9/2026", date(2026, 9, 9)), ("09/09/2026 00:00:00", date(2026, 9, 9)),
+    ("09/09/2026 00:00", date(2026, 9, 9)), ("'09/09/2026", date(2026, 9, 9)), ("09-09-2026", date(2026, 9, 9)),
+    ("09.09.2026", date(2026, 9, 9)), ("09/09/26", date(2026, 9, 9)), ("9-Sep-2026", date(2026, 9, 9)),
+    ("Sep 9, 2026", date(2026, 9, 9)), ("20260909", date(2026, 9, 9)), ("46274", date(2026, 9, 9)),
+    ("ngày 09 tháng 09 năm 2026", date(2026, 9, 9)), ("09/13/2026", date(2026, 9, 13)),
+    ("12/09/2026 12:00:00 SA", date(2026, 9, 12)), ("01/10/2026", date(2026, 10, 1)),
+    ("2026-09-11T00:00:00", date(2026, 9, 11)), ("abc", None), ("31/02/2026", None),
+])
+def test_ngay_dang_chu(v, kq):
+    assert ngay(v) == kq

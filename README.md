@@ -37,6 +37,9 @@ python cli.py "D:/ThueHKD/T9" -o "D:/ThueHKD/KetQua_T9.xlsx"   # tự lấy kỳ
 * **Kỳ tính lấy theo ngày**: sổ quỹ & voucher theo *Ngày chứng từ*; **kho 03 (Xuất KM)
   theo ngày nhận hàng** (*Ngay NH*, thiếu thì *NgayGS*); **kho 01 (dữ liệu kho) theo ngày nhận hàng** (*Ngày giao hàng*). Đổi được ở `cot_ngay` trong cấu hình.
   Mọi nguồn (kể cả cấn trừ, Tổ CP) đều lọc theo kỳ.
+* **Ngày dạng chữ** đọc được: dd/mm/yyyy, d/m/yy, dd-mm-yyyy, dd.mm.yyyy, yyyy-mm-dd, có giờ phía sau,
+  dấu ' ở đầu, khoảng trắng ẩn, 9-Sep-2026, 20260909, "ngày 09 tháng 09 năm 2026". Mặc định **ngày trước tháng**.
+  Ngày không đọc được / để trống được báo riêng ở LƯU Ý (mục NGÀY) kèm ví dụ, không âm thầm bị loại.
 * Không chọn kỳ (CLI không truyền `--thang/--nam`; trang web khi thêm file) → **tự chọn tháng có nhiều chứng từ nhất**.
 * Một thư mục để nhiều file (cả file tổng hợp cũ lẫn file xuất rời, hoặc 2 lần xuất chồng ngày): dòng giống hệt
   dòng đã có ở file khác cùng loại **bị bỏ, không cộng hai lần**, và báo ở LƯU Ý (mục TRÙNG).
